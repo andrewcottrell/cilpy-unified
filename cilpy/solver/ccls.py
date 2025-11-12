@@ -25,12 +25,12 @@ original problem can be found by solving the min-max problem:
 This framework implements this min-max search using two populations:
 1.  An 'Objective Solver' Population: This population searches the original
     problem's solution space (for 'x'). Its goal is to MINIMIZE the Lagrangian
-    function, L(x, mu*, lambda*), where the multipliers (mu*, lambda*) are the best ones
-    found so far by the other population.
+    function, L(x, mu*, lambda*), where the multipliers (mu*, lambda*) are the
+    best ones found so far by the other population.
 2.  A 'Multiplier Solver' Population: This population searches the space of
     Lagrangian multipliers (for 'mu' and 'lambda'). Its goal is to MAXIMIZE the
-    Lagrangian function, L(x*, mu, lambda), where the solution (x*) is the best one
-    found so far by the objective population.
+    Lagrangian function, L(x*, mu, lambda), where the solution (x*) is the best
+    one found so far by the objective population.
 
 At each step, the best individual from each population is used to define the
 fitness landscape for the other. This cooperative process simultaneously drives
@@ -74,7 +74,9 @@ class _LagrangianMinProblem(Problem):
                 will be wrapped.
         """
         super().__init__(
-            original_problem.dimension, original_problem.bounds, "LagrangianMinProblem"
+            original_problem.dimension,
+            original_problem.bounds,
+            "LagrangianMinProblem"
         )
         self.original_problem = original_problem
         self.fixed_multipliers_inequality = [0.0] * len(
@@ -161,9 +163,10 @@ class _LagrangianMaxProblem(Problem):
     """An internal proxy problem for the multiplier-space solver ('max' swarm).
 
     This class wraps the original problem to create the search space for the
-    Lagrangian multipliers (mu and lambda). Its fitness function is L(x*, mu, lambda), where
-    the solution 'x*' is fixed for the current generation. Since library solvers
-    typically minimize, this class returns -L(x*, mu, lambda) to achieve maximization.
+    Lagrangian multipliers (mu and lambda). Its fitness function is L(x*, mu,
+    lambda), where the solution 'x*' is fixed for the current generation. Since
+    library solvers typically minimize, this class returns -L(x*, mu, lambda) to
+    achieve maximization.
 
     Attributes:
         original_problem (Problem): A reference to the user-defined constrained
@@ -240,8 +243,8 @@ class _LagrangianMaxProblem(Problem):
 
         # Calculate L(x*, mu, lambda)
         lagrangian_value = fx
-        lagrangian_value += sum(s * g for s, g in zip(inequality_multipliers, gx))
-        lagrangian_value += sum(l * h for l, h in zip(equality_multipliers, hx))
+        lagrangian_value += sum(s*g for s, g in zip(inequality_multipliers, gx))
+        lagrangian_value += sum(l*h for l, h in zip(equality_multipliers, hx))
 
         # Return the negative value because we want to MAXIMIZE L
         return Evaluation(fitness=-lagrangian_value)

@@ -96,10 +96,46 @@ class SubSpaceProblem(Problem):
 
         lower_bounds = []
         upper_bounds = []
-        
+
         for global_idx in new_indices:
             lower_bounds.append(self._original_problem.bounds[0][global_idx])
             upper_bounds.append(self._original_problem.bounds[1][global_idx])
 
         self.bounds = (lower_bounds, upper_bounds)
+
+    # Methods for original problem
+
+    def begin_iteration(self) -> None:
+        """
+        A notification called by the ExperimentRunner before each solver
+        iteration (just like in the original problem).
+        """
+        pass
+
+    def is_dynamic(self) -> Tuple[bool, bool]:
+        """
+        Returns true if the original problem is dynamic in its objective or constraints.
+
+        Returns:
+            A tuple (is_objective_dynamic, is_constraint_dynamic).
+        """
+        return self._original_problem.is_dynamic()
+
+    def is_multi_objective(self) -> bool:
+        """
+        Returns true if the original problem has multiple objectives.
+
+        Returns:
+            True if the original problem has multiple objectives.
+        """
+        return self._original_problem.is_multi_objective()
+
+    def get_fitness_bounds(self) -> Tuple[float, float]:
+        """
+        Returns the fitness bounds of the original problem.
+
+        Returns:
+            A tuple (global_minimum_fitness, global_maximum_fitness).
+        """
+        return self._original_problem.get_fitness_bounds()
 

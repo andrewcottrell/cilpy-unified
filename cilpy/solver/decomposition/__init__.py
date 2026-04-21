@@ -3,7 +3,9 @@
 """
 
 from cilpy.solver.decomposition.context import ContextVector
+from cilpy.solver.decomposition.sub_problem import SubSpaceProblem
 
 __all__ = [
     "ContextVector",
+    "SubSpaceProblem",
 ]

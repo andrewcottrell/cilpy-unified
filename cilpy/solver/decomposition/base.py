@@ -106,5 +106,27 @@ class CooperativeDecompositionSolver(Solver):
     def _post_step_hook(self) -> None:
         """Will implement this later"""
 
+
+    def get_population(self) -> List[List[float]]:
+        expanded = []
+
+        for k, sub_solver in enumerate(self._sub_solvers):
+            for sub_individual in sub_solver.get_population():
+                full = self._context.get_full_vector()
+
+                for local_idx, global_idx in enumerate(self._groups[k]):
+                    full[global_idx] = sub_individual[local_idx]
+
+                expanded.append(full)
+        return expanded
+
+    def get_population_evaluations(self) -> List[Evaluation]:
+
+        evaluations = []
+        for individual in self.get_population():
+            evaluation = self.problem.evaluate(individual)
+            evaluations.append(evaluations)
+        return evaluations
+
     def get_result(self) -> List[Tuple[List[float], Evaluation]]:
         return [self._get_global_best()]

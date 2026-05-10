@@ -3,8 +3,8 @@ from cilpy.runner import ExperimentRunner
 from cilpy.solver.decomposition.cpso import StandardCooperativeSolver
 from cilpy.solver.pso import PSO
 
-NUM_GROUPS = 10
-SUB_SWARM_SIZE = 5
+NUM_GROUPS = 6
+SUB_SWARM_SIZE = 10
 TOTAL_PARTICLES = NUM_GROUPS * SUB_SWARM_SIZE
 
 # --- 1. Define the problem ---
@@ -48,6 +48,6 @@ runner = ExperimentRunner(
     problems=problems_to_run,
     solver_configurations=solver_configs,
     num_runs=5,
-    max_iterations=2000,
+    max_iterations=10000,
 )
 runner.run_experiments()

@@ -92,10 +92,10 @@ class CooperativeDecompositionSolver(Solver):
     def step(self) -> None:
         self._iteration += 1
 
-        for sub_solver in self._sub_solvers:
+        for k, sub_solver in enumerate(self._sub_solvers):
             sub_solver.step()
-
-        self._sync_context()
+            best_sub_solution, _ = sub_solver.get_result()[0]
+            self._context.update_group(k, best_sub_solution)
 
         current_fitness = self._get_global_best()[1].fitness
         self._best_fitness_history.append(current_fitness)

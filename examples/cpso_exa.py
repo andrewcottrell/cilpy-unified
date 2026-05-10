@@ -1,5 +1,6 @@
 from cilpy.problem.unconstrained import Sphere
 from cilpy.runner import ExperimentRunner
+from cilpy.solver.de import DE
 from cilpy.solver.decomposition.cpso import StandardCooperativeSolver
 from cilpy.solver.pso import PSO
 
@@ -14,6 +15,23 @@ problems_to_run = [
 
 # --- 2. Define the solver configurations ---
 solver_configs = [
+    
+    # Decomposition solver with DE as the sub-solver
+    {
+        "class": StandardCooperativeSolver,
+        "params": {
+            "name": "CPSO_DE",
+            "num_groups": NUM_GROUPS,
+            "sub_solver_class": DE,
+            "sub_solver_params": {
+                "name": "sub_de",
+                "population_size": SUB_SWARM_SIZE,
+                "crossover_rate": 0.9,
+                "f_weight": 0.8,
+            },
+        },
+    },
+
     # Decomposition solver with 10 groups × 5 particles each
     {
         "class": StandardCooperativeSolver,

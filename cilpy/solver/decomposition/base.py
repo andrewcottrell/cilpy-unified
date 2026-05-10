@@ -106,7 +106,6 @@ class CooperativeDecompositionSolver(Solver):
     def _post_step_hook(self) -> None:
         """Will implement this later"""
 
-
     def get_population(self) -> List[List[float]]:
         expanded = []
 
@@ -125,7 +124,7 @@ class CooperativeDecompositionSolver(Solver):
         evaluations = []
         for individual in self.get_population():
             evaluation = self.problem.evaluate(individual)
-            evaluations.append(evaluations)
+            evaluations.append(evaluation)
         return evaluations
 
     def get_result(self) -> List[Tuple[List[float], Evaluation]]:

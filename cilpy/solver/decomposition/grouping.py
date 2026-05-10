@@ -1,5 +1,6 @@
 """Grouping strategies for cooperative decomposition solvers."""
 
+import random
 from abc import ABC, abstractmethod
 from typing import List
 
@@ -48,9 +49,39 @@ class StaticEvenGrouping(GroupingStrategy):
         start = 0
         for i in range(num_groups):
             # Assign the remainder if this is the last group
-            size = base + (remainder if i == num_groups - 1 else 0)
+            is_last_group = i == num_groups - 1
+            size = base + (remainder if is_last_group else 0)
 
             groups.append(list(range(start, start + size)))
+            start += size
+
+        return groups
+
+
+class RandomGrouping(GroupingStrategy):
+    """Partitions dimensions by shuffling indices then splitting into slices.
+
+    The last group absorbs any remainder.
+
+    Example:
+        >>> import random;
+        >>> g = RandomGrouping()
+        >>> g.group(6, 2)
+        [[4, 0, 2], [5, 1, 3]]
+    """
+    def group(self, dimension: int, num_groups: int, **kwargs) -> List[List[int]]:
+        indices = list(range(dimension))
+        random.shuffle(indices)
+
+        base = dimension // num_groups
+        remainder = dimension % num_groups
+        groups: List[List[int]] = []
+
+        start = 0
+        for i in range(num_groups):
+            is_last_group = i == num_groups - 1
+            size = base + (remainder if is_last_group else 0)
+            groups.append(indices[start:start + size])
             start += size
 
         return groups

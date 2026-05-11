@@ -12,5 +12,4 @@ site/
 build/
 dist/
 random/
-test/solver/decomposition/
 .venv/

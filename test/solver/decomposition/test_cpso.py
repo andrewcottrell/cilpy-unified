@@ -5,6 +5,7 @@ Unit tests for StandardCooperativeSolver.
 
 from cilpy.problem.unconstrained import Sphere
 from cilpy.solver.decomposition.cpso import StandardCooperativeSolver
+from cilpy.solver.de import DE
 from cilpy.solver.pso import PSO
 
 class TestInitialisation:

@@ -136,6 +136,23 @@ class PSO(Solver[List[float], float]):
                     self.gbest_position = copy.deepcopy(self.pbest_positions[i])
                     self.gbest_evaluation = copy.deepcopy(self.pbest_evaluations[i])
 
+    def refresh_evaluations(self) -> None:
+        """Re-evaluates stored personal-best fitness values under the
+        current state of the problem.
+        """
+        for i in range(self.swarm_size):
+            self.pbest_evaluations[i] = self.problem.evaluate(self.pbest_positions[i])
+
+        best_idx = 0
+        for i in range(1, self.swarm_size):
+            current_fitness = self.pbest_evaluations[i].fitness
+            best_fitness_so_far = self.pbest_evaluations[best_idx].fitness
+            if current_fitness < best_fitness_so_far:
+                best_idx = i
+
+        self.gbest_position = copy.deepcopy(self.pbest_positions[best_idx])
+        self.gbest_evaluation = copy.deepcopy(self.pbest_evaluations[best_idx])
+
     def get_result(self) -> List[Tuple[List[float], Evaluation[float]]]:
         """Returns the global best solution found by the swarm."""
         return [(self.gbest_position, self.gbest_evaluation)]

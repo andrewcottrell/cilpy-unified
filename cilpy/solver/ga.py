@@ -171,6 +171,14 @@ class GA(Solver[List[float], float]):
         self.population[worst_new_idx] = best_individual
         self.evaluations[worst_new_idx] = best_evaluation
 
+    def refresh_evaluations(self) -> None:
+        """
+        Re-evaluates every individual's stored fitness under
+        the current state of the problem.
+        """
+        for i in range(self.population_size):
+            self.evaluations[i] = self.problem.evaluate(self.population[i])
+
     def get_result(self) -> List[Tuple[List[float], Evaluation[float]]]:
         """Returns the best solution found in the current population."""
         best_idx = 0

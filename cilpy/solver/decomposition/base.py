@@ -93,6 +93,7 @@ class CooperativeDecompositionSolver(Solver):
         self._iteration += 1
 
         for k, sub_solver in enumerate(self._sub_solvers):
+            sub_solver.refresh_evaluations()
             sub_solver.step()
             best_sub_solution, _ = sub_solver.get_result()[0]
             self._context.update_group(k, best_sub_solution)

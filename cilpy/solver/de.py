@@ -111,6 +111,14 @@ class DE(Solver[List[float], float]):
                 self.population[i] = trial_vector
                 self.evaluations[i] = trial_eval
 
+    def refresh_evaluations(self) -> None:
+        """
+        Re-evaluates every individual's stored fitness under the
+        current state of the problem.
+        """
+        for i in range(self.population_size):
+            self.evaluations[i] = self.problem.evaluate(self.population[i])
+
     def get_result(self) -> List[Tuple[List[float], Evaluation[float]]]:
         """Returns the best solution found in the current population."""
         best_idx = 0

@@ -148,6 +148,19 @@ class Quadratic(Problem[List[float], float]):
         """Indicates that the function is not multi-objective."""
         return False
 
+    def get_fitness_bounds(self) -> Tuple[float, float]:
+        best_fitness = 0.0
+
+        lower_bound = self.bounds[0][0]
+        upper_bound = self.bounds[1][0]
+        limit = max(abs(lower_bound), abs(upper_bound))
+
+        n = self.dimension
+        sum_of_squares = n * (n + 1) * (2 * n + 1) / 6
+        worst_fitness = (limit**2) * sum_of_squares
+
+        return (best_fitness, worst_fitness)
+
 
 class Ackley(Problem[List[float], float]):
     """The Ackley function.
@@ -217,6 +230,90 @@ class Ackley(Problem[List[float], float]):
         """Indicates that the function is not multi-objective."""
         return False
 
+    def get_fitness_bounds(self) -> Tuple[float, float]:
+
+        best_fitness = 0.0
+        worst_fitness = self.a + math.e
+
+        return (best_fitness, worst_fitness)
+
+
+class Rastrigin(Problem[List[float], float]):
+    """The Rastrigin function.
+
+    A highly multimodal benchmark function with a large number of local
+    minima. Its global minimum is at the
+    origin (0, ..., 0) with a fitness value of 0.
+
+    The function is defined as:
+    f(x) = A*n + Sum(x_i^2 - A*cos(2*pi*x_i)) for i = 1 to n
+    """
+
+    def __init__(self, dimension: int = 2, domain: Tuple[float, float] = (-5.12, 5.12)):
+        """Initializes a Rastrigin function problem instance.
+
+        The standard parameter `A=10` is used.
+
+        Args:
+            dimension: The number of decision variables (dimensions). Defaults
+                to 2.
+            domain: A tuple `(min_val, max_val)` defining the symmetric search
+                space boundary for each dimension. Defaults to (-5.12, 5.12).
+        """
+        lower_bounds = [domain[0]] * dimension
+        upper_bounds = [domain[1]] * dimension
+        super().__init__(
+            dimension=dimension, bounds=(lower_bounds, upper_bounds), name="Rastrigin"
+        )
+        self.A = 10
+
+    def evaluate(self, solution: List[float]) -> Evaluation[float]:
+        """Evaluates the Rastrigin function for a given solution.
+
+        Args:
+            solution (List[float]): A list of floats representing the decision
+                variables of the candidate solution.
+
+        Returns:
+            Evaluation[float]: An Evaluation object containing the fitness
+                (a single float) and no constraint violations.
+        """
+        per_dimension_sum = sum(
+            x**2 - self.A * math.cos(2 * math.pi * x) for x in solution
+        )
+        fitness = self.A * self.dimension + per_dimension_sum
+        return Evaluation(fitness=fitness)
+
+    def is_dynamic(self) -> Tuple[bool, bool]:
+        """Indicates that the Rastrigin function is not dynamic.
+
+        Returns:
+            Tuple[bool, bool]: A tuple `(False, False)` as the function is
+                static.
+        """
+        return (False, False)
+
+    def is_multi_objective(self) -> bool:
+        """Indicates that the function is not multi-objective."""
+        return False
+
+    def get_fitness_bounds(self) -> Tuple[float, float]:
+        """Returns the known theoretical min and max fitness values.
+
+        Returns:
+            A tuple containing (global_minimum_fitness, global_maximum_fitness).
+        """
+        best_fitness = 0.0
+
+        lower_bound = self.bounds[0][0]
+        upper_bound = self.bounds[1][0]
+        limit = max(abs(lower_bound), abs(upper_bound))
+
+        worst_per_dimension = limit**2 + self.A
+        worst_fitness = self.dimension * worst_per_dimension
+
+        return (best_fitness, worst_fitness)
+
 
 if __name__ == "__main__":
     my_sphere = Sphere(2, (-5.12, 5.12))
@@ -227,3 +324,6 @@ if __name__ == "__main__":
 
     my_ackley = Ackley(2, (-5.12, 5.12))
     print(my_ackley.evaluate([0, 0]))
+
+    my_rastrigin = Rastrigin(2, (-5.12, 5.12))
+    print(my_rastrigin.evaluate([0, 0]))

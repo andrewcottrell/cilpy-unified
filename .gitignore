@@ -4,10 +4,10 @@
 **/*.jpeg
 **/*.out.*
 **/*.tmp.*
-tmp.*
-clean_pc.sh
-
 cilpy.egg-info
-site/
+clean_pc.sh
+tmp.*
+
 build/
 dist/
+site/

@@ -1,29 +1,30 @@
 # Welcome to `cilpy`
 
 `cilpy` (which stands for "computational intelligence library for Python") is an
-extensible Python library for computational intelligence, designed to streamline
-research and experimentation with nature-inspired algorithms (NIAs).
+extensible Python library, designed to help research and experiment with
+nature-inspired algorithms (NIAs).
 
-The primary goal of `cilpy` is to provide a unified and robust framework for
-tackling a wide range of optimization tasks, including:
+## The Guiding Mission for `cilpy`
+The goal for `cilpy` is to be a useful tool for people implementing and studying
+NIAs. It should
 
-* Single- and multi-objective optimization
-* Constrained and unconstrained problems
-* Static and dynamic objectives and constraints
+The primary goal of `cilpy` is to provide a simple and versatile framework for
+studying a wide range of optimization problems and algorithms. The library
+should:
 
-`cilpy` strives to be a useful tool for researchers developing new algorithms,
-and students learning about computational intelligence. `cilpy` offers tools to
-design, execute, and analyze experiments with ease and rigor.
+1. Allow users to implement a wide variety of optimization problems, including:
+    - Single- and multi-objective problems  
+    - Constrained and unconstrained problems  
+    - Problems with static and dynamic objectives and constraints  
+2. Allow users to implement a wide variety of nature-inspired algorithms.
+3. Make it easy to specify and repeat experiments.
 
-## The `cilpy` Philosophy: Modularity and Extensibility
-
-The ecosystem for nature-inspired optimization algorithms is fragmented.
-Researchers frequently have to build their experimental setups from scratch or
-adapt to libraries that are difficult to extend, lack comprehensive features, or
-are no longer maintained.
-
-`cilpy` is designed to solve this problem by separating concerns. The library is
-divided into four distinct, interoperable components:
+## An Overview of `cilpy`
+`cilpy` serves its goal by clearly separating the concerns of defining a
+problem, defining a solving algorithm, and specifying an experiment. For each of
+these components, we find which abstractions strike the right balance between
+simplicity and utility through iteration. The components of this library are
+thus:
 
 1. **`cilpy.problem`**: This component is used to specify optimization problems,
    including objective function(s), search space, and constraints.
@@ -35,24 +36,19 @@ divided into four distinct, interoperable components:
 4. **`cilpy.runner`**: This component is used to orchestrate the interaction
    between components, run experiments, and log results.
 
-By enforcing a clean separation between these parts through well-defined
-interfaces, `cilpy` allows users to seamlessly swap out components.
+By enforcing separation between these parts through well-defined interfaces,
+`cilpy` allows users to seamlessly swap out components.
 
-* **Want to test a new algorithm?** Implement the `Solver` interface, and you
-    can immediately benchmark it against all existing problems.
-* **Have a new benchmark problem?** Implement the `Problem` interface, and any
+- To test a new algorithm: Implement the `Solver` interface, and you can
+  immediately benchmark it against all existing problems.
+- To try a new benchmark problem: Implement the `Problem` interface, and any
   existing solver can be used to tackle it.
 
-This modularity drastically reduces boilerplate code and allows users to focus
-on the novel aspects of their research.
-
-## How `cilpy` Works: The Experiment Runner
-
-At the core of `cilpy`'s workflow is the `ExperimentRunner` in `cilpy.runner`.
-It orchestrates the entire experimental process. After being provided a list of
-problems to solve, solvers and their configurations to test, and comparisons to
-perform on the algorithm, the runner orchestrates all further action, and
-performs the experiment.
+## How `cilpy` is Used
+The `ExperimentRunner` in `cilpy.runner` orchestrates the entire experimental
+process. After being provided a list of problems to solve, solvers and their
+configurations to test, and comparisons to perform on the algorithm, the runner
+orchestrates all further action, and performs the experiment.
 
 The typical workflow looks like this:
 

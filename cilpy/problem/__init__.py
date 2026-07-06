@@ -73,8 +73,7 @@ class Problem(ABC, Generic[SolutionType, FitnessType]):
     Attributes:
         name (str): The name of the problem instance.
         dimension (int): The number of decision variables in the solution space.
-        bounds (Tuple[SolutionType, SolutionType]): A tuple `(lower_bounds,
-        upper_bounds)` defining the search space for each dimension.
+        bounds (Tuple[SolutionType, SolutionType]): A tuple `(lower_bounds, upper_bounds)` defining the search space for each dimension.
 
     Example:
         A minimal implementation for a 2D Sphere function problem.

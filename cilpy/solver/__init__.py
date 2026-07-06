@@ -109,10 +109,8 @@ class Solver(ABC, Generic[SolutionType, FitnessType]):
         Returns:
             A list of tuples, where each tuple contains `(solution,
             evaluation)`.
-            - For single-objective solvers, this list should contain a single
-              tuple with the best solution found.
-            - For multi-objective solvers, this list should contain the set
-              of non-dominated solutions (the Pareto front archive).
+            - For single-objective solvers, this list should contain a single tuple with the best solution found.
+            - For multi-objective solvers, this list should contain the set of non-dominated solutions (the Pareto front archive).
 
             Example return for a single-objective solver:
             `[([0.1, -0.5], Evaluation(fitness=0.26))]`

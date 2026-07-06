@@ -32,14 +32,10 @@ class PSO(Solver[List[float], float]):
         Args:
             problem: The optimization problem to solve.
             swarm_size: The number of particles in the swarm.
-            w: The inertia weight, controlling the influence of the previous
-               velocity.
-            c1: The cognitive coefficient, scaling the influence of the
-               particle's personal best.
-            c2: The social coefficient, scaling the influence of the swarm's
-               global best.
-            **kwargs: Additional keyword arguments (not used in this canonical
-               PSO).
+            w: The inertia weight, controlling the influence of the previous velocity.
+            c1: The cognitive coefficient, scaling the influence of the particle's personal best.
+            c2: The social coefficient, scaling the influence of the swarm's global best.
+            **kwargs: Additional keyword arguments (not used in this canonical PSO).
         """
         super().__init__(problem, name)
         self.swarm_size = swarm_size

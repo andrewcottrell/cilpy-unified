@@ -4,7 +4,12 @@
 from abc import ABC, abstractmethod
 
 class RegroupTrigger(ABC):
+    """Abstract base for regroup triggers.
 
+    A regroup trigger chooses when the coordinator should change
+    current dimension grouping and use a new one.
+
+    """
 
     @abstractmethod
     def should_trigger(self, state: dict) -> bool:
@@ -30,7 +35,9 @@ class RegroupTrigger(ABC):
 
 
 class FixedIntervalTrigger(RegroupTrigger):
-
+    """Triggers every fixed amount of iterations. Never fires at
+        iteration zero.
+    """
 
     def __init__(self, interval: int) -> None:
         """

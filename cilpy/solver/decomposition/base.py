@@ -92,20 +92,72 @@ class CooperativeDecompositionSolver(Solver):
     def step(self) -> None:
         self._iteration += 1
 
+        assembled_fitness = self.problem.evaluate(
+            self._context.get_full_vector()).fitness
+
         for k, sub_solver in enumerate(self._sub_solvers):
             sub_solver.refresh_evaluations()
             sub_solver.step()
-            best_sub_solution, _ = sub_solver.get_result()[0]
-            self._context.update_group(k, best_sub_solution)
+            best_sub_solution, best_sub_evaluation = sub_solver.get_result()[0]
+            candidate_fitness = best_sub_evaluation.fitness
 
-        current_fitness = self._get_global_best()[1].fitness
-        self._best_fitness_history.append(current_fitness)
+            if self._accepts_context_update(candidate_fitness, assembled_fitness):
+                self._context.update_group(k, best_sub_solution)
+                assembled_fitness = candidate_fitness
+
+        self._best_fitness_history.append(assembled_fitness)
 
         self._post_step_hook()
 
+    def _accepts_context_update(self, candidate_fitness: float,
+        current_context_fitness: float) -> bool:
+        """This decides whether a group's new best is written into the context.
+
+        Args:
+            candidate_fitness: The assembled fitness if the groups new best is
+                written into the context.
+            current_context_fitness: Assembled fitness of the current context.
+
+        Returns:
+            True if the update should be written into the context.
+        """
+
+        return True
+
     @abstractmethod
     def _post_step_hook(self) -> None:
-        """Will implement this later"""
+        """Hook at the end of each step.
+        """
+
+    def _build_state_dict(self) -> dict:
+        """
+        Builds the state dictionary used by a regroup trigger.
+
+        Returns:
+            A dictionary with the current iteration count.
+        """
+        return {"iteration": self._iteration }
+
+    def _perform_regroup(self, new_groups: List[List[int]]) -> None:
+        """
+        Replaces the current grouping with a new grouping of all the dimensions.
+
+        Args:
+            new_groups: The new assignments of range=dimension into groups.
+                It must have the same number of groups as the current assignments.
+        """
+
+        self._groups = [list(group) for group in new_groups]
+        self._context.reassign_groups(new_groups) 
+
+
+        for k, group in enumerate(new_groups):
+            self._sub_problems[k].update_dim_indices(group)
+
+        self._sub_solvers = self._instantiate_sub_solvers(
+            self._sub_solver_class, self._sub_solver_params, len(new_groups))
+
+        self._last_regroup_iteration = self._iteration
 
     def get_population(self) -> List[List[float]]:
         expanded = []

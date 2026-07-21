@@ -97,7 +97,7 @@ solver_configs = [
     {
         "class": DynamicRandomGroupingSolver,
         "params": {
-            "name": "CDE",
+            "name": "DRG_DE",
             "num_groups": NUM_GROUPS,
             "sub_solver_class": DE,
             "sub_solver_params": {

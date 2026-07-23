@@ -11,6 +11,8 @@ from cilpy.solver.decomposition.context import ContextVector
 from cilpy.solver.decomposition.grouping import GroupingStrategy
 from cilpy.solver.decomposition.sub_problem import SubSpaceProblem
 
+PER_DIMENSION_STATE_ATTRIBUTES = ("population", "velocities", "pbest_positions")
+
 class CooperativeDecompositionSolver(Solver):
     """Abstract base that partitions a D-dim problem into sub-problems.
     """
@@ -138,6 +140,68 @@ class CooperativeDecompositionSolver(Solver):
         """
         return {"iteration": self._iteration }
 
+    def _require_uniform_population_size(self) -> None:
+        """
+        Checks that every sub-solver holds the same number of individuals.
+
+        Raises:
+            ValueError: If the sub solvers hold diferent numbers of individuals.
+        """
+        population_sizes = set()
+
+        for sub_solver in self._sub_solvers:
+            population_sizes.add(len(sub_solver.get_population()))
+
+        if len(population_sizes) > 1:
+            raise ValueError(
+                "regrouping needs every sub-solver to hold the same number of "
+                f"individuals, found sizes {sorted(population_sizes)}"
+            )
+
+    def _collect_state_columns(self, attribute_name: str) -> Optional[dict]:
+        """
+        Reads one sub-solver state matrix into per-dimension columns.
+
+        Args:
+            attribute_name: Name of a sub-solver attribute
+
+        Returns:
+            A dictionary mapping each global dimension index to the list of
+            values the individuals hold for that dimension..
+        """
+        for sub_solver in self._sub_solvers:
+            if not hasattr(sub_solver, attribute_name):
+                return None
+
+        columns_by_dimension = {}
+
+        for k, sub_solver in enumerate(self._sub_solvers):
+            state_matrix = getattr(sub_solver, attribute_name)
+
+            for local_idx, global_idx in enumerate(self._groups[k]):
+                
+                column = [row[local_idx] for row in state_matrix]
+                columns_by_dimension[global_idx] = column
+
+        return columns_by_dimension
+
+    def _apply_state_columns(self, attribute_name: str, columns_by_dimension: dict) -> None:
+        """
+        Writes per-dimension columns back into the freshly built sub-solvers.
+
+        Args:
+            attribute_name: Name of the sub solver attribute to write into.
+            columns_by_dimension: Columns created by _collect_state_columns.
+        """
+        for k, sub_solver in enumerate(self._sub_solvers):
+            state_matrix = getattr(sub_solver, attribute_name)
+
+            for local_idx, global_idx in enumerate(self._groups[k]):
+                column = columns_by_dimension[global_idx]
+
+                for individual_idx, value in enumerate(column):
+                    state_matrix[individual_idx][local_idx] = value
+
     def _perform_regroup(self, new_groups: List[List[int]]) -> None:
         """
         Replaces the current grouping with a new grouping of all the dimensions.
@@ -147,15 +211,32 @@ class CooperativeDecompositionSolver(Solver):
                 It must have the same number of groups as the current assignments.
         """
 
-        self._groups = [list(group) for group in new_groups]
-        self._context.reassign_groups(new_groups) 
+        self._require_uniform_population_size()
 
+        preserved_state = {}
+
+        for attribute_name in PER_DIMENSION_STATE_ATTRIBUTES:
+            
+            columns_by_dimension = self._collect_state_columns(attribute_name)
+
+            if columns_by_dimension is not None:
+                preserved_state[attribute_name] = columns_by_dimension
+
+
+        self._groups = [list(group) for group in new_groups]
+        self._context.reassign_groups(new_groups)
 
         for k, group in enumerate(new_groups):
             self._sub_problems[k].update_dim_indices(group)
 
         self._sub_solvers = self._instantiate_sub_solvers(
             self._sub_solver_class, self._sub_solver_params, len(new_groups))
+
+        for attribute_name, columns_by_dimension in preserved_state.items():
+            self._apply_state_columns(attribute_name, columns_by_dimension)
+
+        for sub_solver in self._sub_solvers:
+            sub_solver.refresh_evaluations()
 
         self._last_regroup_iteration = self._iteration
 

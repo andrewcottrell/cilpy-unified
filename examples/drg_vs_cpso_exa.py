@@ -7,7 +7,7 @@ from cilpy.solver.ga import GA
 from cilpy.solver.decomposition.drg import DynamicRandomGroupingSolver
 from cilpy.solver.decomposition.trigger import FixedIntervalTrigger
 
-DIMENSION = 100
+DIMENSION = 500
 NUM_GROUPS = 6
 SUB_SWARM_SIZE = 10
 TOTAL_PARTICLES = NUM_GROUPS * SUB_SWARM_SIZE
@@ -37,7 +37,7 @@ solver_configs = [
                 "c1": 1.49618,
                 "c2": 1.49618,
             },
-            "regroup_trigger": FixedIntervalTrigger(interval=50),
+            "regroup_trigger": FixedIntervalTrigger(interval=1),
         },
     },
 
@@ -72,7 +72,7 @@ solver_configs = [
                 "mutation_rate": 0.1,
                 "tournament_size": 3,
             },
-            "regroup_trigger": FixedIntervalTrigger(interval=50),
+            "regroup_trigger": FixedIntervalTrigger(interval=1),
         },
     },
 
@@ -106,7 +106,7 @@ solver_configs = [
                 "crossover_rate": 0.9,
                 "f_weight": 0.8,
             },
-            "regroup_trigger": FixedIntervalTrigger(interval=50),
+            "regroup_trigger": FixedIntervalTrigger(interval=1),
         },
     },
     # CDE

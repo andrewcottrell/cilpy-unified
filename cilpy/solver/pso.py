@@ -2,10 +2,11 @@
 
 import copy
 import random
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from cilpy.problem import Problem, Evaluation
 from cilpy.solver import Solver
+from cilpy.solver.chm import ConstraintHandler
 
 
 class PSO(Solver[List[float], float]):
@@ -24,6 +25,7 @@ class PSO(Solver[List[float], float]):
         w: float,
         c1: float,
         c2: float,
+        constraint_handler: Optional[ConstraintHandler[float]] = None,
         **kwargs,
     ):
         """
@@ -38,10 +40,13 @@ class PSO(Solver[List[float], float]):
                particle's personal best.
             c2: The social coefficient, scaling the influence of the swarm's
                global best.
+            constraint_handler: An optional strategy for comparing constrained
+               solutions. Drives personal- and global-best updates via
+               `self.comparator`. If None, a fitness-only comparator is used.
             **kwargs: Additional keyword arguments (not used in this canonical
                PSO).
         """
-        super().__init__(problem, name)
+        super().__init__(problem, name, constraint_handler=constraint_handler)
         self.swarm_size = swarm_size
         self.w = w
         self.c1 = c1

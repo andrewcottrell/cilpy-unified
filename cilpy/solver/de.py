@@ -1,9 +1,10 @@
 # cilpy/solver/de.py
 import random
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from cilpy.problem import Problem, Evaluation
 from cilpy.solver import Solver
+from cilpy.solver.chm import ConstraintHandler
 
 
 class DE(Solver[List[float], float]):
@@ -28,6 +29,7 @@ class DE(Solver[List[float], float]):
         population_size: int,
         crossover_rate: float,
         f_weight: float,
+        constraint_handler: Optional[ConstraintHandler[float]] = None,
         **kwargs,
     ):
         """
@@ -40,10 +42,13 @@ class DE(Solver[List[float], float]):
             crossover_rate: The crossover probability (CR) in the range [0, 1].
             f_weight: The differential weight (F) for mutation, typically in the
                 range [0, 2].
+            constraint_handler: An optional strategy for comparing constrained
+                solutions. Drives trial-vector acceptance via `self.comparator`.
+                If None, a fitness-only comparator is used.
             **kwargs: Additional keyword arguments (not used in this canonical
                 DE).
         """
-        super().__init__(problem, name)
+        super().__init__(problem, name, constraint_handler=constraint_handler)
         self.population_size = population_size
         self.crossover_rate = crossover_rate
         self.f_weight = f_weight

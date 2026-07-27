@@ -43,10 +43,17 @@ two PSOs for CCPSO) which manage the search process for their respective
 populations.
 """
 
-from typing import List, Tuple, Type
+import math
+from typing import List, Optional, Tuple, Type
 
 from cilpy.problem import Problem, Evaluation, SolutionType
 from cilpy.solver import Solver
+from cilpy.solver.chm import ConstraintHandler
+
+#: Default magnitude bound on the Lagrange multiplier search space. The bound
+#: must be finite so that population initialization via random.uniform produces
+#: usable values; see `_LagrangianMaxProblem.__init__`.
+DEFAULT_MULTIPLIER_MAX = 1e4
 
 
 class _LagrangianMinProblem(Problem):
@@ -180,6 +187,7 @@ class _LagrangianMaxProblem(Problem):
         self,
         original_problem: Problem[SolutionType, float],
         fixed_solution: SolutionType,
+        multiplier_max: float = DEFAULT_MULTIPLIER_MAX,
     ):
         """Initializes the proxy problem for the multiplier space.
 
@@ -188,7 +196,14 @@ class _LagrangianMaxProblem(Problem):
             fixed_solution (SolutionType): An initial solution 'x' used to
                 determine the number of constraints and thus the dimension
                 of the multiplier search space.
+            multiplier_max (float): The magnitude bound on the multiplier
+                search space. Must be finite; see the bounds note below.
         """
+        if not math.isfinite(multiplier_max) or multiplier_max <= 0:
+            raise ValueError(
+                f"multiplier_max must be a positive finite value, got {multiplier_max}"
+            )
+
         num_inequality = len(
             original_problem.evaluate(fixed_solution).constraints_inequality or []
         )
@@ -197,10 +212,16 @@ class _LagrangianMaxProblem(Problem):
         )
         dimension = num_inequality + num_equality
 
-        # Multipliers for inequality constraints (mu) must be >= 0
-        # Multipliers for equality constraints (lambda) are unrestricted
-        lower_bounds = [0.0] * num_inequality + [-float("inf")] * num_equality
-        upper_bounds = [float("inf")] * (num_inequality + num_equality)
+        # Multipliers for inequality constraints (mu) must be >= 0; multipliers
+        # for equality constraints (lambda) are unrestricted in sign.
+        #
+        # These bounds must be FINITE. Solvers initialize populations with
+        # random.uniform(lower, upper), and random.uniform(0.0, inf) returns
+        # inf, after which crossover arithmetic (inf - inf) yields nan. An
+        # infinite bound therefore makes the multiplier population degenerate
+        # from the first iteration, so no multiplier search occurs at all.
+        lower_bounds = [0.0] * num_inequality + [-multiplier_max] * num_equality
+        upper_bounds = [multiplier_max] * (num_inequality + num_equality)
 
         super().__init__(
             dimension, (lower_bounds, upper_bounds), "LagrangianMaxProblem"
@@ -300,6 +321,8 @@ class CoevolutionaryLagrangianSolver(Solver):
         multiplier_solver_class: Type[Solver],
         objective_solver_params: dict,
         multiplier_solver_params: dict,
+        constraint_handler: Optional[ConstraintHandler[float]] = None,
+        multiplier_max: float = DEFAULT_MULTIPLIER_MAX,
         **kwargs,
     ):
         """Initializes the CoevolutionaryLagrangianSolver.
@@ -315,15 +338,24 @@ class CoevolutionaryLagrangianSolver(Solver):
                 the objective solver.
             multiplier_solver_params: A dictionary of parameters to initialize
                 the multiplier solver.
+            constraint_handler: An optional strategy for comparing constrained
+                solutions, applied when re-evaluating results against the
+                original problem. The sub-solvers operate on unconstrained
+                proxy problems and so use their own comparators.
+            multiplier_max: The finite magnitude bound on the multiplier search
+                space. Defaults to `DEFAULT_MULTIPLIER_MAX`.
         """
 
-        super().__init__(problem, name=name)
+        super().__init__(problem, name=name, constraint_handler=constraint_handler)
 
         # 1. Create the proxy problems
         # We need an initial solution to dimension the multiplier problem
         initial_solution = [problem.bounds[0][i] for i in range(problem.dimension)]
+        self.multiplier_max = multiplier_max
         self.min_problem = _LagrangianMinProblem(problem)
-        self.max_problem = _LagrangianMaxProblem(problem, initial_solution)
+        self.max_problem = _LagrangianMaxProblem(
+            problem, initial_solution, multiplier_max=multiplier_max
+        )
 
         # 2. Instantiate the internal solvers
         self.objective_solver = objective_solver_class(

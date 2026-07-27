@@ -1,7 +1,12 @@
 site_name: cilpy Documentation
 
 plugins:
-  - mkdocstrings
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_options:
+              warn_missing_types: false
   - search
 
 

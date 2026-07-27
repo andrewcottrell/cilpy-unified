@@ -75,6 +75,7 @@ class ExperimentRunner:
         solver_configurations: List[Dict[str, Any]],
         num_runs: int,
         max_iterations: int,
+        output_dir: str = "out",
     ):
         """
         Initializes the ExperimentRunner.
@@ -90,6 +91,8 @@ class ExperimentRunner:
                 solver-problem pair.
             max_iterations: The number of iterations (`solver.step()` calls)
                 per run.
+            output_dir: Directory for the result CSVs. Defaults to "out",
+                relative to the current working directory.
 
         Solver Configuration Format:
             .. code-block:: python
@@ -110,6 +113,7 @@ class ExperimentRunner:
         self.solver_configurations = solver_configurations
         self.num_runs = num_runs
         self.max_iterations = max_iterations
+        self.output_dir = output_dir
 
     def run_experiments(self):
         """Executes the full suite of defined experiments.
@@ -126,7 +130,7 @@ class ExperimentRunner:
         print("======== Starting All Experiments ========")
 
         # Ensure output directory exists
-        os.makedirs("out", exist_ok=True)
+        os.makedirs(self.output_dir, exist_ok=True)
 
         for problem in self.problems:
             print(f"\n--- Processing Problem: {problem.name} ---")
@@ -141,7 +145,7 @@ class ExperimentRunner:
 
                 solver_name = current_solver_params.get("name")
                 output_file_path = os.path.join(
-                    "out", f"{problem.name}_{solver_name}.out.csv"
+                    self.output_dir, f"{problem.name}_{solver_name}.out.csv"
                 )
 
                 print(f"\n  -> Starting Experiment: {solver_name} on {problem.name}")

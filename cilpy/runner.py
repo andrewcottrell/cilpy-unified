@@ -217,7 +217,7 @@ class ExperimentRunner:
 
         # --- Safely get fitness bounds and set RE flag ---
         bounds_known = False  # Flag to track if we can calculate relative error
-        f_max, fitness_range = 0, 0
+        f_min, f_max, fitness_range = 0, 0, 0
 
         try:
             f_min, f_max = solver.problem.get_fitness_bounds()
@@ -300,9 +300,27 @@ class ExperimentRunner:
                 # If the problem doesn't implement it, log empty strings
                 diversity = ""
 
-            # Log the data for the current iteration
+            # --- Feasibility of the best solution ---
+            if solver.problem.is_multi_objective():
+                is_feasible = ""
+            else:
+                is_feasible = int(self._is_solution_feasible(result[0][1]))
+
+            # Log the data for the current iteration. `optimum_value` and
+            # `worst_value` record the fitness bounds so that the relative
+            # error P_RE can be recomputed offline by analysis scripts.
             writer.writerow(
-                [run_id, iteration, accuracy, feasibility, diversity, relative_error]
+                [
+                    run_id,
+                    iteration,
+                    accuracy,
+                    feasibility,
+                    diversity,
+                    relative_error,
+                    is_feasible,
+                    f_min if bounds_known else "",
+                    f_max if bounds_known else "",
+                ]
             )
 
         # --- Calculate Relative Error Distance (P_RED) conditionally ---
@@ -359,7 +377,11 @@ class ExperimentRunner:
         - `accuracy`: Fitness of best solution(s) found so far.
         - `feasibility`: The percentage of solutions that are feasible.
         - `diversity`: A measure of the diversity at this iteration.
-        - `relative_error`: The relative error at this iteration.
+        - `relative_error`: The relative error P_RE at this iteration, oriented
+          so that 1.0 is optimal.
+        - `is_feasible`: 1 if the best solution satisfies all constraints, else 0.
+        - `optimum_value`: The best attainable fitness for the current time step.
+        - `worst_value`: The worst attainable fitness for the current time step.
 
         Args:
             solver_class: The solver class to be instantiated.
@@ -376,6 +398,9 @@ class ExperimentRunner:
             "feasibility",
             "diversity",
             "relative_error",
+            "is_feasible",
+            "optimum_value",
+            "worst_value",
         ]
         summary_header = [
             "problem_name",

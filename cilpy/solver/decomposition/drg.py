@@ -40,7 +40,9 @@ class DynamicRandomGroupingSolver(CooperativeDecompositionSolver):
             constraint_handler=constraint_handler,
             **kwargs,
         )
+        
         self._regroup_trigger = regroup_trigger or FixedIntervalTrigger(interval=50)
+        self._regroup_trigger.reset()
 
     def _accepts_context_update(self, candidate_fitness: float,
         current_context_fitness: float ) -> bool:

@@ -14,7 +14,7 @@ TOTAL_PARTICLES = NUM_GROUPS * SUB_SWARM_SIZE
 
 # --- 1. Define the problem ---
 problems_to_run = [
-    Sphere(dimension=DIMENSION, domain=(-100, 100)),
+    Sphere(dimension=DIMENSION, domain=(-5.12, 5.12)),
     Quadratic(dimension=DIMENSION, domain=(-100, 100)),
     Ackley(dimension=DIMENSION, domain=(-32, 32)),
     Rastrigin(dimension=DIMENSION, domain=(-5.12, 5.12)),
@@ -37,7 +37,7 @@ solver_configs = [
                 "c1": 1.49618,
                 "c2": 1.49618,
             },
-            "regroup_trigger": FixedIntervalTrigger(interval=1),
+            "regroup_trigger": FixedIntervalTrigger(interval=50),
         },
     },
 
@@ -72,7 +72,7 @@ solver_configs = [
                 "mutation_rate": 0.1,
                 "tournament_size": 3,
             },
-            "regroup_trigger": FixedIntervalTrigger(interval=1),
+            "regroup_trigger": FixedIntervalTrigger(interval=50),
         },
     },
 
@@ -106,7 +106,7 @@ solver_configs = [
                 "crossover_rate": 0.9,
                 "f_weight": 0.8,
             },
-            "regroup_trigger": FixedIntervalTrigger(interval=1),
+            "regroup_trigger": FixedIntervalTrigger(interval=50),
         },
     },
     # CDE
@@ -130,7 +130,7 @@ solver_configs = [
 runner = ExperimentRunner(
     problems=problems_to_run,
     solver_configurations=solver_configs,
-    num_runs=3,
-    max_iterations=10000,
+    num_runs=30,
+    max_iterations=5000,
 )
 runner.run_experiments()

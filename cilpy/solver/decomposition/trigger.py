@@ -16,8 +16,8 @@ class RegroupTrigger(ABC):
         """Decides whether a regroup event should happen now.
 
         Args:
-            state: Is the coordinator state dictionary. It holds the key
-                'iteration'.
+            state: Is the coordinator state dictionary. It holds the keys
+                iteration and best_fitness.
 
         Returns:
             True when the coordinator should regroup and False otherwise.
@@ -32,6 +32,9 @@ class RegroupTrigger(ABC):
         Args:
             state: The same state dictionary passed to should_trigger.
         """
+
+    def reset(self) -> None:
+        """Clears the state caried over from a previous run."""
 
 
 class FixedIntervalTrigger(RegroupTrigger):
@@ -64,6 +67,79 @@ class FixedIntervalTrigger(RegroupTrigger):
         is_interval_boundary = iteration % self._interval == 0
 
         return has_started and is_interval_boundary
+
+
+class StagnationTrigger(RegroupTrigger):
+    """This triggers when the search stops making good progress and begins to stagnate. 
+    """
+
+    def __init__(self, patience: int, tolerance: float = 1e-4) -> None:
+        """
+        Initializes the StagnationTrigger.
+
+        Args:
+            patience: Number of iterations without good
+                improvement that is alowed before a regroup is triggered.
+
+            tolerance: The amount of improvement that is seen as meaningfull.
+                This amount is relative towards the fitness.
+        """
+
+        self._patience = patience
+        self._tolerance = tolerance
+
+        self._best_fitness_so_far = None
+        self._iterations_without_improvement = 0
+
+    def _is_meaningful_improvement(self, current_best_fitness: float) -> bool:
+        """
+        Decides whether the current fitness improved meaningfull enough or not.
+
+        Args:
+            current_best_fitness: The coordinators best assembled fitness so far.
+
+        Returns:
+            True if the improvement is at least the required fraction.
+        """
+    
+        reference_magnitude = abs(self._best_fitness_so_far)
+
+        improvement = self._best_fitness_so_far - current_best_fitness
+        required_improvement = self._tolerance * reference_magnitude
+
+        return improvement > required_improvement
+
+
+    def should_trigger(self, state: dict) -> bool:
+
+        current_best_fitness = state["best_fitness"]
+
+        if self._best_fitness_so_far is None:
+            self._best_fitness_so_far = current_best_fitness
+            self._iterations_without_improvement = 0
+            return False
+
+        if self._is_meaningful_improvement(current_best_fitness):
+
+            self._best_fitness_so_far = current_best_fitness
+            self._iterations_without_improvement = 0
+
+        else:
+            self._iterations_without_improvement += 1
+
+        return self._iterations_without_improvement >= self._patience
+
+    def on_triggered(self, state: dict) -> None:
+        """Resets the patience after a regroup has been performed.
+
+        Args:
+            state: The same state dictionary.
+        """
+        self._iterations_without_improvement = 0
+
+    def reset(self) -> None:
+        self._best_fitness_so_far = None
+        self._iterations_without_improvement = 0
 
 
 class NeverTrigger(RegroupTrigger):

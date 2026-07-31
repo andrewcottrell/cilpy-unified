@@ -136,9 +136,16 @@ class CooperativeDecompositionSolver(Solver):
         Builds the state dictionary used by a regroup trigger.
 
         Returns:
-            A dictionary with the current iteration count.
+            A dictionary with the current iteration count and the best
+            assembled fitness reached so until now.
         """
-        return {"iteration": self._iteration }
+        if self._best_fitness_history:
+            best_fitness = self._best_fitness_history[-1]
+    
+        else:
+            best_fitness = float("inf")
+
+        return {"iteration": self._iteration, "best_fitness": best_fitness}
 
     def _require_uniform_population_size(self) -> None:
         """

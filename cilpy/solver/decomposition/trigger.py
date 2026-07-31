@@ -1,6 +1,7 @@
 # cilpy/solver/decomposition/trigger.py
 """Regroup triggers for cooperative decomposition solvers."""
 
+import math
 from abc import ABC, abstractmethod
 
 class RegroupTrigger(ABC):
@@ -34,7 +35,7 @@ class RegroupTrigger(ABC):
         """
 
     def reset(self) -> None:
-        """Clears the state caried over from a previous run."""
+        """Clears the state carried over from a previous run."""
 
 
 class FixedIntervalTrigger(RegroupTrigger):
@@ -83,7 +84,17 @@ class StagnationTrigger(RegroupTrigger):
 
             tolerance: The amount of improvement that is seen as meaningfull.
                 This amount is relative towards the fitness.
+
+        Raises:
+            ValueError: If patience is less than 1 or tolerance is negative.
         """
+
+        if patience < 1:
+            raise ValueError(f"patience must be at least 1, but got {patience}")
+
+        if tolerance < 0:
+            raise ValueError(f"tolerance must not be negative, but got {tolerance}")
+
 
         self._patience = patience
         self._tolerance = tolerance
@@ -103,6 +114,9 @@ class StagnationTrigger(RegroupTrigger):
         """
     
         reference_magnitude = abs(self._best_fitness_so_far)
+
+        if not math.isfinite(reference_magnitude):
+            return math.isfinite(current_best_fitness)
 
         improvement = self._best_fitness_so_far - current_best_fitness
         required_improvement = self._tolerance * reference_magnitude

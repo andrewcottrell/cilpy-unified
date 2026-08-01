@@ -2,7 +2,39 @@
 
 import random
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Optional
+
+
+def shuffled_partition(dimension: int, number_of_groups: int) -> List[List[int]]:
+    """
+    Shuffles the dimension indices and splits them.
+
+    Args:
+        dimension: Total number of decision variables.
+        number_of_groups: How many groups we to split the shuffled indices into.
+
+    Returns:
+        A list of `number_of_groups` lists of global dimension indices. The last
+        group takes any remainder.
+    """
+
+    indices = list(range(dimension))
+    random.shuffle(indices)
+    base_size = dimension // number_of_groups
+    remainder = dimension % number_of_groups
+
+    groups: List[List[int]] = []
+    start = 0
+
+    for group_index in range(number_of_groups):
+        
+        is_last_group = group_index == number_of_groups - 1
+        size = base_size + (remainder if is_last_group else 0)
+
+        groups.append(indices[start:start + size])
+        start += size
+
+    return groups
 
 
 class GroupingStrategy(ABC):
@@ -70,18 +102,39 @@ class RandomGrouping(GroupingStrategy):
         [[4, 0, 2], [5, 1, 3]]
     """
     def group(self, dimension: int, num_groups: int, **kwargs) -> List[List[int]]:
-        indices = list(range(dimension))
-        random.shuffle(indices)
 
-        base = dimension // num_groups
-        remainder = dimension % num_groups
-        groups: List[List[int]] = []
+        return shuffled_partition(dimension, num_groups)
 
-        start = 0
-        for i in range(num_groups):
-            is_last_group = i == num_groups - 1
-            size = base + (remainder if is_last_group else 0)
-            groups.append(indices[start:start + size])
-            start += size
 
-        return groups
+class RandomGroupSizeGrouping(GroupingStrategy):
+    """Random grouping where the group size it self is changed each time.
+    """
+
+    def __init__(self, group_sizes: List[int]) -> None:
+        """
+        Initializes the RandomGroupSizeGrouping.
+
+        Args:
+            group_sizes: The set of group sizes to choose from.
+                For example {2, 5, 10, 50, 100} for
+                100 dimensions.
+        """
+
+        self._group_sizes = list(group_sizes)
+
+    def group(self, dimension: int, num_groups: Optional[int] = None,
+              **kwargs) -> List[List[int]]:
+        """
+        Partitions the dimensions using a randomly chosen group size.
+
+        Args:
+            dimension: Total number of decision variables.
+
+        Returns:
+            A list of groups of dimension indices.
+        """
+
+        chosen_group_size = random.choice(self._group_sizes)
+        number_of_groups = max(1, dimension // chosen_group_size)
+
+        return shuffled_partition(dimension, number_of_groups)

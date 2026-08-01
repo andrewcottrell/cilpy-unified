@@ -46,13 +46,16 @@ class CooperativeDecompositionSolver(Solver):
             initial_vector=list(problem.bounds[0]),
         )
 
+
+        actual_number_of_groups = len(self._groups)
+
         self._sub_problems: List[SubSpaceProblem] = [
             SubSpaceProblem(problem, self._context, k, self._groups[k])
-            for k in range(num_groups)
+            for k in range(actual_number_of_groups)
         ]
 
         self._sub_solvers: List[Solver] = self._instantiate_sub_solvers(
-            sub_solver_class, sub_solver_params, num_groups
+            sub_solver_class, sub_solver_params, actual_number_of_groups
         )
         self._sub_solver_class = sub_solver_class
         self._sub_solver_params = sub_solver_params
@@ -209,13 +212,30 @@ class CooperativeDecompositionSolver(Solver):
                 for individual_idx, value in enumerate(column):
                     state_matrix[individual_idx][local_idx] = value
 
+    def _rebuild_sub_problems(self, new_groups: List[List[int]]) -> None:
+        """
+        Makes the list of sub-problems match the new grouping.
+
+        Args:
+            new_groups: The new assignment of dimensions into groups.
+        """
+        del self._sub_problems[len(new_groups):]
+
+        for k, group in enumerate(new_groups):
+            if k < len(self._sub_problems):
+                self._sub_problems[k].update_dim_indices(group)
+
+            else:
+                self._sub_problems.append(
+                    SubSpaceProblem(self.problem, self._context, k, group))
+
     def _perform_regroup(self, new_groups: List[List[int]]) -> None:
         """
         Replaces the current grouping with a new grouping of all the dimensions.
 
         Args:
             new_groups: The new assignments of range=dimension into groups.
-                It must have the same number of groups as the current assignments.
+                The number of groups may differ from the current grouping.
         """
 
         self._require_uniform_population_size()
@@ -233,8 +253,7 @@ class CooperativeDecompositionSolver(Solver):
         self._groups = [list(group) for group in new_groups]
         self._context.reassign_groups(new_groups)
 
-        for k, group in enumerate(new_groups):
-            self._sub_problems[k].update_dim_indices(group)
+        self._rebuild_sub_problems(new_groups)
 
         self._sub_solvers = self._instantiate_sub_solvers(
             self._sub_solver_class, self._sub_solver_params, len(new_groups))

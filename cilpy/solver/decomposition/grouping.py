@@ -118,7 +118,18 @@ class RandomGroupSizeGrouping(GroupingStrategy):
             group_sizes: The set of group sizes to choose from.
                 For example {2, 5, 10, 50, 100} for
                 100 dimensions.
+
+        Raises:
+            ValueError: If group_sizes is empty or holds a size below 1.
         """
+
+        if not group_sizes:
+            raise ValueError("group_sizes must hold at least one size")
+
+        for size in group_sizes:
+            if size < 1:
+                raise ValueError(
+                    f"every group size must be at least 1, but got {size}")
 
         self._group_sizes = list(group_sizes)
 

@@ -315,6 +315,91 @@ class Rastrigin(Problem[List[float], float]):
         return (best_fitness, worst_fitness)
 
 
+class Rosenbrock(Problem[List[float], float]):
+    """The generalized Rosenbrock function.
+
+    A widely used multimodal, non-separable benchmark function.
+    The global minimum is at (1, ..., 1) with a fitness value of 0.
+
+    The function is defined as:
+    f(x) = Sum_{i=1}^{n-1} [100*(x_{i+1} - x_i^2)^2 + (x_i - 1)^2]
+    """
+
+    def __init__(self, dimension: int = 2, domain: Tuple[float, float] = (-30, 30)):
+        """Initializes a generalized Rosenbrock function problem instance.
+
+        Args:
+            dimension: The number of decision variables (dimensions). Defaults
+                to 2. At least two are needed for this function.
+            domain: A tuple `(min_val, max_val)` defining the symmetric search
+                space boundary for each dimension. Defaults to (-30, 30).
+        """
+        lower_bounds = [domain[0]] * dimension
+        upper_bounds = [domain[1]] * dimension
+        super().__init__(
+            dimension=dimension, bounds=(lower_bounds, upper_bounds), name="Rosenbrock"
+        )
+
+    def evaluate(self, solution: List[float]) -> Evaluation[float]:
+        """Evaluates the generalized Rosenbrock function for a given solution.
+
+        Args:
+            solution (List[float]): A list of floats representing the decision
+                variables of the candidate solution.
+
+        Returns:
+            Evaluation[float]: An Evaluation object containing the fitness
+                (a single float) and no constraint violations.
+        """
+        fitness = 0.0
+
+        for i in range(len(solution) - 1):
+            current_value = solution[i]
+            next_value = solution[i + 1]
+
+            valley_term = 100.0 * (next_value - current_value**2) ** 2
+
+            offset_term = (current_value - 1) ** 2
+
+            fitness += valley_term + offset_term
+
+        return Evaluation(fitness=fitness)
+
+    def is_dynamic(self) -> Tuple[bool, bool]:
+        """Indicates that the Rosenbrock function is not dynamic.
+
+        Returns:
+            Tuple[bool, bool]: A tuple `(False, False)` as the function is
+                static.
+        """
+        return (False, False)
+
+    def is_multi_objective(self) -> bool:
+        """Indicates that the function is not multi-objective."""
+        return False
+
+    def get_fitness_bounds(self) -> Tuple[float, float]:
+        """Returns the known theoretical min and max fitness values.
+
+        Returns:
+            A tuple containing (global_minimum_fitness, global_maximum_fitness).
+        """
+
+        best_fitness = 0.0
+
+        lower_bound = self.bounds[0][0]
+        upper_bound = self.bounds[1][0]
+        limit = max(abs(lower_bound), abs(upper_bound))
+
+        worst_valley_term = 100.0 * (limit + limit**2) ** 2
+        worst_offset_term = (limit + 1) ** 2
+
+        number_of_terms = max(0, self.dimension - 1)
+        worst_fitness = number_of_terms * (worst_valley_term + worst_offset_term)
+
+        return (best_fitness, worst_fitness)
+
+
 if __name__ == "__main__":
     my_sphere = Sphere(2, (-5.12, 5.12))
     print(my_sphere.evaluate([0, 0]))
@@ -327,3 +412,6 @@ if __name__ == "__main__":
 
     my_rastrigin = Rastrigin(2, (-5.12, 5.12))
     print(my_rastrigin.evaluate([0, 0]))
+
+    my_rosenbrock = Rosenbrock(2, (-30, 30))
+    print(my_rosenbrock.evaluate([1, 1]))

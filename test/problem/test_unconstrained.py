@@ -13,7 +13,7 @@ from typing import List, Type
 
 # Assuming the project is installed in editable mode or path is configured
 from cilpy.problem import Problem, Evaluation
-from cilpy.problem.unconstrained import Sphere, Quadratic, Ackley
+from cilpy.problem.unconstrained import Sphere, Quadratic, Ackley, Rastrigin, Rosenbrock
 
 # --- Test Configuration ---
 # Add any new unconstrained problem class here to include it in the tests.
@@ -21,6 +21,8 @@ UNCONSTRAINED_PROBLEMS: List[Type[Problem]] = [
     Sphere,
     Quadratic,
     Ackley,
+    Rastrigin,
+    Rosenbrock
 ]
 
 # --- Test Cases ---

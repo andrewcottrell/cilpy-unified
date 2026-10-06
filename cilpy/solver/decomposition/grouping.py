@@ -133,8 +133,7 @@ class RandomGroupSizeGrouping(GroupingStrategy):
 
         self._group_sizes = list(group_sizes)
 
-    def group(self, dimension: int, num_groups: Optional[int] = None,
-              **kwargs) -> List[List[int]]:
+    def group(self, dimension: int, num_groups: Optional[int] = None, **kwargs) -> List[List[int]]:
         """
         Partitions the dimensions using a randomly chosen group size.
 
@@ -149,3 +148,108 @@ class RandomGroupSizeGrouping(GroupingStrategy):
         number_of_groups = max(1, dimension // chosen_group_size)
 
         return shuffled_partition(dimension, number_of_groups)
+
+
+def cut_into_parts(indices: List[int], number_of_parts: int) -> List[List[int]]:
+    """
+    This cuts a list of indices into the specified number of parts.
+
+    Args:
+        indices: The indicies that must be cut
+        number_of_parts: the number of parts to split into
+
+    Returns:
+        The cut parts as a list of lists conatining the indices.
+    """
+
+    cut_size = len(indices)//number_of_parts
+    remainder = len(indices)%number_of_parts
+
+    parts: List[List[int]] = []
+    start = 0
+
+    for part_index in range(number_of_parts):
+
+        size = cut_size
+        if part_index < remainder:
+            size += 1
+
+        parts.append(indices[start:start + size])
+        start += size
+
+    return parts
+
+
+class GroupSplitter(ABC):
+    """Abstract base class for splitting groups"""
+
+    def __init__(self, split_factor: int = 2) -> None:
+        """
+        Initializes the GroupSplitter.
+
+        Args:
+            split_factor: Number of parts to split into.
+        """
+
+        if split_factor < 2:
+            raise ValueError(f"split_factor must be at least 2, instead got {split_factor}")
+
+        self.split_factor = split_factor
+
+    def split(self, groups: List[List[int]], state: Optional[dict] = None) -> List[List[int]]:
+        """
+        Splits only the selected groups.
+
+        Args:
+            groups: the chosen groups of dimension indices.
+
+        Returns:
+            The new list of groups.
+        """
+
+        groups_to_split = self._select_groups_to_split(groups, state)
+        new_groups: List[List[int]] = []
+
+        for group_index, group in enumerate(groups):
+
+            if group_index in groups_to_split:
+                parts = self._split_group(group, state)
+                new_groups.extend(parts)
+
+            else:
+                new_groups.append(list(group))
+
+        return new_groups
+
+    def _select_groups_to_split(self, groups: List[List[int]], state: Optional[dict]) -> List[int]:
+
+        selected = []
+
+        for group_index, group in enumerate(groups):
+            if len(group) > 1:
+                selected.append(group_index)
+
+        return selected
+
+    @abstractmethod
+    def _split_group(self, group: List[int], state: Optional[dict]) -> List[List[int]]:
+        """
+        This method splits one group into smaller groups.
+
+        Args:
+            group: Dimension indices of the group
+            state: Optional coordinator state.
+
+        Returns:
+            The parts of the group
+        """
+
+
+class EvenSplitter(GroupSplitter):
+    """A type of GroupSplitter that splits each group into equal parts."""
+
+    def _split_group(self, group: List[int], state: Optional[dict]) -> List[List[int]]:
+
+        number_of_parts = min(self.split_factor, len(group))
+
+        return cut_into_parts(list(group), number_of_parts)

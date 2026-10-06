@@ -161,3 +161,35 @@ class NeverTrigger(RegroupTrigger):
 
     def should_trigger(self, state: dict) -> bool:
         return False
+
+
+def restructure_interval(max_iterations: int, dimension: int, factor: int) -> int:
+    """Calculates how many iterations should be between regroup events.
+
+    Args:
+        max_iterations: The total number of iterations in the run.
+        dimension: Total number of decision variables.
+        factor: Amount of parts a group splits into.
+
+    Returns:
+        The interval between regroup events in iterations.
+
+    Raises:
+        ValueError: if max_iterations or dimension is below 1 or factor is below 2.
+    """
+
+    if max_iterations < 1:
+        raise ValueError(f"max_iterations must be at least 1 but is {max_iterations}")
+
+    if dimension < 1:
+        raise ValueError(f"dimension must be at least 1 but is {dimension}")
+
+    if factor < 2:
+        raise ValueError(f"factor must be at least 2 but is {factor}")
+
+    number_of_restructures = math.log(dimension) / math.log(factor)
+    number_of_phases = 1 + number_of_restructures
+
+    interval = math.floor(round(max_iterations / number_of_phases, 6))
+
+    return max(1, interval)

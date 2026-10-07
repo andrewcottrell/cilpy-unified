@@ -26,9 +26,12 @@ class CooperativeDecompositionSolver(Solver):
         sub_solver_params: dict,
         grouping_strategy: GroupingStrategy,
         constraint_handler: Optional[ConstraintHandler] = None,
+        only_accept_improvements: bool = False,
         **kwargs,
     ):
         super().__init__(problem, name, constraint_handler)
+
+        self._only_accept_improvements = only_accept_improvements
 
         if not (1 <= num_groups <= problem.dimension):
             raise ValueError(
@@ -126,6 +129,9 @@ class CooperativeDecompositionSolver(Solver):
         Returns:
             True if the update should be written into the context.
         """
+
+        if self._only_accept_improvements:
+            return candidate_fitness <= current_context_fitness
 
         return True
 

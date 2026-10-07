@@ -38,25 +38,12 @@ class DynamicRandomGroupingSolver(CooperativeDecompositionSolver):
             sub_solver_params=sub_solver_params,
             grouping_strategy=grouping_strategy or RandomGrouping(),
             constraint_handler=constraint_handler,
+            only_accept_improvements=True,
             **kwargs,
         )
-        
+
         self._regroup_trigger = regroup_trigger or FixedIntervalTrigger(interval=50)
         self._regroup_trigger.reset()
-
-    def _accepts_context_update(self, candidate_fitness: float,
-        current_context_fitness: float ) -> bool:
-        """Accepts a groups new best only when it does not decrease the context fitness.
-
-        Args:
-            candidate_fitness: The assembled fitness if the groups new best is
-                written into the context. 
-            current_context_fitness: Assembled fitness of the current context.
-
-        Returns:
-            True if the candidate is at least as good as the current context.
-        """
-        return candidate_fitness <= current_context_fitness
 
     def _post_step_hook(self) -> None:
 

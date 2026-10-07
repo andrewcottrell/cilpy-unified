@@ -95,8 +95,10 @@ class ContextVector:
         Raises:
             ValueError: If any index is missing, duplicated, or out of range.
         """
+
         all_indices = []
         for group in groups:
+            
             for idx in group:
                 all_indices.append(idx)
                 

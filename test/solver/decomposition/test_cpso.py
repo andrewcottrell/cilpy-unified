@@ -74,6 +74,20 @@ class TestStep:
 
         assert len(solver._best_fitness_history) == 3
 
+class TestContextUpdate:
+
+    def test_only_accept_improvements_is_off_by_default(self):
+
+        solver = make_solver()
+
+        assert solver._only_accept_improvements is False
+
+    def test_worse_update_is_still_accepted(self):
+
+        solver = make_solver()
+
+        assert solver._accepts_context_update(candidate_fitness=5.0, current_context_fitness=3.0) is True
+
 class TestGetResult:
 
     def test_get_result_returns_a_list_with_one_entry(self):

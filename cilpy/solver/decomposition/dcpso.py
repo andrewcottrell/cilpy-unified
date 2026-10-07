@@ -32,6 +32,7 @@ class DecompositionCooperativeSolver(CooperativeDecompositionSolver):
             problem=problem,
             name=name,
             num_groups=num_groups,
+            sub_solver_class=sub_solver_class,
             sub_solver_params=sub_solver_params,
             grouping_strategy=grouping_strategy or StaticEvenGrouping(),
             constraint_handler=constraint_handler,
@@ -49,5 +50,25 @@ class DecompositionCooperativeSolver(CooperativeDecompositionSolver):
         self._regroup_trigger = regroup_trigger
         self._regroup_trigger.reset()
 
+    def _is_fully_decomposed(self) -> bool:
+
+        for group in self._groups:
+            if len(group) > 1:
+                return False
+
+        return True
+
     def _post_step_hook(self) -> None:
-        pass
+
+        # Stop when all groups have only one variable
+        if self._is_fully_decomposed():
+            return
+
+        state = self._build_state_dict()
+
+        if self._regroup_trigger.should_trigger(state):
+
+            new_groups = self._group_splitter.split(self._groups, state)
+
+            self._perform_regroup(new_groups)
+            self._regroup_trigger.on_triggered(state)

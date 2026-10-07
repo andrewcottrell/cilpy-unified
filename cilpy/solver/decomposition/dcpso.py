@@ -1,4 +1,5 @@
 # cilpy/solver/decomposition/dcpso.py
+import random
 from typing import Optional, Type
 from cilpy.problem import Problem
 from cilpy.solver import Solver
@@ -58,6 +59,21 @@ class DecompositionCooperativeSolver(CooperativeDecompositionSolver):
 
         return True
 
+    def _give_new_velocities(self) -> None:
+
+        for sub_solver in self._sub_solvers:
+
+            # GA and DE has no velocities
+            if not hasattr(sub_solver, "velocities"):
+                continue
+
+            lower_bounds, upper_bounds = sub_solver.problem.bounds
+
+            for velocity in sub_solver.velocities:
+                for d in range(len(velocity)):
+                    span_size = upper_bounds[d] - lower_bounds[d]
+                    velocity[d] = random.uniform(-span_size, span_size)
+
     def _post_step_hook(self) -> None:
 
         # Stop when all groups have only one variable
@@ -71,4 +87,5 @@ class DecompositionCooperativeSolver(CooperativeDecompositionSolver):
             new_groups = self._group_splitter.split(self._groups, state)
 
             self._perform_regroup(new_groups)
+            self._give_new_velocities()
             self._regroup_trigger.on_triggered(state)

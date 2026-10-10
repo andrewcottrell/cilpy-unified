@@ -265,3 +265,63 @@ class RandomSplitter(GroupSplitter):
         number_of_parts = min(self.split_factor, len(shuffled_group))
 
         return cut_into_parts(shuffled_group, number_of_parts)
+
+class GroupMerger(ABC):
+    """Abstract base class for merging groups"""
+
+    def __init__(self, merge_factor: int = 2) -> None:
+
+        if merge_factor < 2:
+            raise ValueError(f"merge_factor must be at least 2 but got {merge_factor}")
+
+        self.merge_factor = merge_factor
+
+    def merge(self, groups: List[List[int]], state: Optional[dict] = None) -> List[List[int]]:
+        """
+        Merges groups in each selected block into one group.
+
+        Args:
+            groups: the groups of dimension indices.
+
+        Returns:
+            The new list of groups.
+        """
+
+        blocks = self._select_groups_to_merge(groups, state)
+        new_groups: List[List[int]] = []
+
+        for block in blocks:
+
+            merged_group = []
+            for group_index in block:
+                merged_group.extend(groups[group_index])
+
+            new_groups.append(merged_group)
+
+        return new_groups
+
+    @abstractmethod
+    def _select_groups_to_merge(self, groups: List[List[int]], state: Optional[dict]) -> List[List[int]]:
+        """
+        Chooses which groups are merged together.
+
+        Args:
+            groups: The groups of dimension indices.
+
+        Returns:
+            Blocks of group indices
+        """
+
+class EvenMerger(GroupMerger):
+    """A GroupMerger that merges every merge_factor groups next to each other"""
+
+    def _select_groups_to_merge(self, groups: List[List[int]], state: Optional[dict]) -> List[List[int]]:
+
+        blocks = []
+
+        for start in range(0, len(groups), self.merge_factor):
+
+            end = min(start + self.merge_factor, len(groups))
+            blocks.append(list(range(start, end)))
+
+        return blocks

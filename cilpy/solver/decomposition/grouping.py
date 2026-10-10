@@ -253,3 +253,15 @@ class EvenSplitter(GroupSplitter):
         number_of_parts = min(self.split_factor, len(group))
 
         return cut_into_parts(list(group), number_of_parts)
+
+class RandomSplitter(GroupSplitter):
+    """A GroupSplitter that shuffles each group and then splits it into equal parts."""
+
+    def _split_group(self, group: List[int], state: Optional[dict]) -> List[List[int]]:
+
+        shuffled_group = list(group)
+        random.shuffle(shuffled_group)
+
+        number_of_parts = min(self.split_factor, len(shuffled_group))
+
+        return cut_into_parts(shuffled_group, number_of_parts)

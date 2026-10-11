@@ -52,4 +52,17 @@ class MergingCooperativeSolver(CooperativeDecompositionSolver):
         self._regroup_trigger.reset()
 
     def _post_step_hook(self) -> None:
-        pass
+
+        if len(self._groups) == 1:
+            
+            return
+
+        state = self._build_state_dict()
+
+        if self._regroup_trigger.should_trigger(state):
+
+            new_groups = self._group_merger.merge(self._groups, state)
+
+            self._perform_regroup(new_groups) 
+            self._give_new_velocities()
+            self._regroup_trigger.on_triggered(state)

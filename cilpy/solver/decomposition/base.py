@@ -1,6 +1,7 @@
 # cilpy/solver/decomposition/base.py
 """Abstract coordinator for cooperative decomposition solvers."""
 
+import random
 from abc import abstractmethod
 from typing import List, Optional, Tuple, Type
 
@@ -271,6 +272,23 @@ class CooperativeDecompositionSolver(Solver):
             sub_solver.refresh_evaluations()
 
         self._last_regroup_iteration = self._iteration
+
+    def _give_new_velocities(self) -> None:
+
+        for sub_solver in self._sub_solvers:
+
+
+            if not hasattr(sub_solver, "velocities"):
+                continue
+
+            lower_bounds, upper_bounds = sub_solver.problem.bounds
+
+            for velocity in sub_solver.velocities:
+                
+                for d in range(len(velocity)):
+                    
+                    span_size = upper_bounds[d] - lower_bounds[d]
+                    velocity[d] = random.uniform(-span_size, span_size)
 
     def get_population(self) -> List[List[float]]:
         expanded = []

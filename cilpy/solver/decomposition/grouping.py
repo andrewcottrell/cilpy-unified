@@ -325,3 +325,16 @@ class EvenMerger(GroupMerger):
             blocks.append(list(range(start, end)))
 
         return blocks
+
+class RandomMerger(GroupMerger):
+
+    def _select_groups_to_merge(self, groups: List[List[int]], state: Optional[dict]) -> List[List[int]]:
+
+        group_indices = list(range(len(groups)))
+        random.shuffle(group_indices)
+        blocks = []
+
+        for start in range(0, len(group_indices), self.merge_factor):
+            blocks.append(group_indices[start:start + self.merge_factor])
+
+        return blocks

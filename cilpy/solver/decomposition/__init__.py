@@ -7,7 +7,7 @@ from cilpy.solver.decomposition.sub_problem import SubSpaceProblem
 from cilpy.solver.decomposition.grouping import (
     GroupingStrategy, StaticEvenGrouping, RandomGrouping,
     RandomGroupSizeGrouping, GroupSplitter, EvenSplitter,
-    RandomSplitter)
+    RandomSplitter, GroupMerger, EvenMerger, RandomMerger)
 from cilpy.solver.decomposition.trigger import (
     RegroupTrigger, FixedIntervalTrigger, StagnationTrigger,
     NeverTrigger, restructure_interval)
@@ -15,6 +15,7 @@ from cilpy.solver.decomposition.base import CooperativeDecompositionSolver
 from cilpy.solver.decomposition.cpso import StandardCooperativeSolver
 from cilpy.solver.decomposition.drg import DynamicRandomGroupingSolver
 from cilpy.solver.decomposition.dcpso import DecompositionCooperativeSolver
+from cilpy.solver.decomposition.mcpso import MergingCooperativeSolver
 
 __all__ = [
     "ContextVector",
@@ -26,6 +27,9 @@ __all__ = [
     "GroupSplitter",
     "EvenSplitter",
     "RandomSplitter",
+    "GroupMerger",
+    "EvenMerger",
+    "RandomMerger",
     "RegroupTrigger",
     "FixedIntervalTrigger",
     "StagnationTrigger",
@@ -35,4 +39,5 @@ __all__ = [
     "StandardCooperativeSolver",
     "DynamicRandomGroupingSolver",
     "DecompositionCooperativeSolver",
+    "MergingCooperativeSolver",
 ]

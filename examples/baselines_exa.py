@@ -4,7 +4,7 @@ from cilpy.solver.de import DE
 from cilpy.solver.ga import GA
 from cilpy.solver.pso import PSO
 
-DIMENSION = 500
+DIMENSION = 100
 
 NUM_GROUPS = 6
 SUB_SWARM_SIZE = 10

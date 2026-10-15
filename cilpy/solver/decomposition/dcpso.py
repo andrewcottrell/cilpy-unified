@@ -1,4 +1,6 @@
 # cilpy/solver/decomposition/dcpso.py
+"""Decomposition Cooperative solver (DCPSO)."""
+
 from typing import Optional, Type
 from cilpy.problem import Problem
 from cilpy.solver import Solver
@@ -8,7 +10,7 @@ from cilpy.solver.decomposition.grouping import (EvenSplitter, GroupingStrategy,
 from cilpy.solver.decomposition.trigger import (FixedIntervalTrigger, RegroupTrigger, restructure_interval)
 
 class DecompositionCooperativeSolver(CooperativeDecompositionSolver):
-    """DCPSO solver"""
+    """Cooperative solver that starts with one group and keeps splitting it."""
 
     def __init__(
         self,
@@ -51,6 +53,7 @@ class DecompositionCooperativeSolver(CooperativeDecompositionSolver):
         self._regroup_trigger.reset()
 
     def _is_fully_decomposed(self) -> bool:
+        """Returns True when every group has only one dimension."""
 
         for group in self._groups:
             if len(group) > 1:
@@ -59,6 +62,7 @@ class DecompositionCooperativeSolver(CooperativeDecompositionSolver):
         return True
 
     def _post_step_hook(self) -> None:
+        """Splits all the groups when the trigger fires until every group has one dimension."""
 
         # Stop when all groups have only one variable
         if self._is_fully_decomposed():

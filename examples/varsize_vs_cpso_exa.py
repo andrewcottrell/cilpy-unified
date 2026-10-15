@@ -8,7 +8,7 @@ from cilpy.solver.decomposition.drg import DynamicRandomGroupingSolver
 from cilpy.solver.decomposition.grouping import RandomGroupSizeGrouping
 from cilpy.solver.decomposition.trigger import FixedIntervalTrigger
 
-DIMENSION = 500
+DIMENSION = 100
 SUB_SWARM_SIZE = 10
 
 GROUP_SIZES = [5, 10, 50, 100, 250]

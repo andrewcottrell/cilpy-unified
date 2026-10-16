@@ -1,6 +1,4 @@
 # cilpy/solver/decomposition/drg.py
-"""Dynamic Random Grouping cooperative solver."""
-
 from typing import Optional, Type
 from cilpy.problem import Problem
 from cilpy.solver import Solver
@@ -10,13 +8,7 @@ from cilpy.solver.decomposition.grouping import GroupingStrategy, RandomGrouping
 from cilpy.solver.decomposition.trigger import RegroupTrigger, FixedIntervalTrigger
 
 class DynamicRandomGroupingSolver(CooperativeDecompositionSolver):
-    """Cooperative decomposition solver that randomly regroups on a trigger.
-
-    This solver reshuffles which variables are optimized together at certain
-    intervals which helps on problems where a static partition can get stuck
-    on local minima.
-
-    """
+    """Cooperative solver that randomly regroups the dimensions when the trigger fires."""
 
     def __init__(
         self,
@@ -30,6 +22,7 @@ class DynamicRandomGroupingSolver(CooperativeDecompositionSolver):
         constraint_handler: Optional[ConstraintHandler] = None,
         **kwargs,
     ):
+
         super().__init__(
             problem=problem,
             name=name,
@@ -46,6 +39,7 @@ class DynamicRandomGroupingSolver(CooperativeDecompositionSolver):
         self._regroup_trigger.reset()
 
     def _post_step_hook(self) -> None:
+        """Randomly regroups the dimensions when the trigger fires, keeping the same number of groups."""
 
         state = self._build_state_dict()
 
@@ -53,6 +47,6 @@ class DynamicRandomGroupingSolver(CooperativeDecompositionSolver):
 
             new_groups = self._grouping_strategy.group(
                 self.problem.dimension, len(self._groups))
-            
+
             self._perform_regroup(new_groups)
             self._regroup_trigger.on_triggered(state)

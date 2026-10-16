@@ -8,7 +8,7 @@ from cilpy.solver.decomposition.grouping import (EvenMerger, GroupingStrategy, G
 from cilpy.solver.decomposition.trigger import (FixedIntervalTrigger, RegroupTrigger, restructure_interval)
 
 class MergingCooperativeSolver(CooperativeDecompositionSolver):
-    """MCPSO solver"""
+    """Cooperative solver that starts with one group per dimension and keeps merging them."""
 
     def __init__(
         self,
@@ -24,8 +24,9 @@ class MergingCooperativeSolver(CooperativeDecompositionSolver):
         constraint_handler: Optional[ConstraintHandler] = None,
         **kwargs,
     ):
+
         if regroup_trigger is None and max_iterations is None:
-            raise ValueError("either regroup_trigger or max_iterations must be give")
+            raise ValueError("either regroup_trigger or max_iterations must be given")
 
         if num_groups is None:
             num_groups = problem.dimension
@@ -48,13 +49,20 @@ class MergingCooperativeSolver(CooperativeDecompositionSolver):
             interval = restructure_interval(
                 max_iterations, problem.dimension, self._group_merger.merge_factor)
             regroup_trigger = FixedIntervalTrigger(interval=interval)
+
         self._regroup_trigger = regroup_trigger
         self._regroup_trigger.reset()
 
-    def _post_step_hook(self) -> None:
+    def _is_fully_merged(self) -> bool:
+        """Returns True when all dimensions are in a single group."""
 
-        if len(self._groups) == 1:
-            
+        return len(self._groups) == 1
+
+    def _post_step_hook(self) -> None:
+        """Merges the groups when the trigger fires until only one group is left."""
+
+        # Stop when all variables are in one group
+        if self._is_fully_merged():
             return
 
         state = self._build_state_dict()
@@ -63,6 +71,6 @@ class MergingCooperativeSolver(CooperativeDecompositionSolver):
 
             new_groups = self._group_merger.merge(self._groups, state)
 
-            self._perform_regroup(new_groups) 
+            self._perform_regroup(new_groups)
             self._give_new_velocities()
             self._regroup_trigger.on_triggered(state)

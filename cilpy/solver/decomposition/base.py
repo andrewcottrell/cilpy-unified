@@ -6,6 +6,7 @@ from abc import abstractmethod
 from typing import List, Optional, Tuple, Type
 
 from cilpy.problem import Evaluation, Problem
+from cilpy.problem.counting import CountingProblem
 from cilpy.solver import Solver
 from cilpy.solver.chm import ConstraintHandler
 from cilpy.solver.decomposition.context import ContextVector
@@ -50,11 +51,12 @@ class CooperativeDecompositionSolver(Solver):
             initial_vector=list(problem.bounds[0]),
         )
 
+        self._counting_problem = CountingProblem(problem)
 
         actual_number_of_groups = len(self._groups)
 
         self._sub_problems: List[SubSpaceProblem] = [
-            SubSpaceProblem(problem, self._context, k, self._groups[k])
+            SubSpaceProblem(self._counting_problem, self._context, k, self._groups[k])
             for k in range(actual_number_of_groups)
         ]
 
@@ -101,7 +103,7 @@ class CooperativeDecompositionSolver(Solver):
     def step(self) -> None:
         self._iteration += 1
 
-        assembled_fitness = self.problem.evaluate(
+        assembled_fitness = self._counting_problem.evaluate(
             self._context.get_full_vector()).fitness
 
         for k, sub_solver in enumerate(self._sub_solvers):
@@ -146,16 +148,21 @@ class CooperativeDecompositionSolver(Solver):
         Builds the state dictionary used by a regroup trigger.
 
         Returns:
-            A dictionary with the current iteration count and the best
-            assembled fitness reached so until now.
+            A dictionary with the current iteration count, the best
+            assembled fitness reached so until now and the number of
+            evaluations used so far.
         """
         if self._best_fitness_history:
             best_fitness = self._best_fitness_history[-1]
-    
+
         else:
             best_fitness = float("inf")
 
-        return {"iteration": self._iteration, "best_fitness": best_fitness}
+        return {
+            "iteration": self._iteration,
+            "best_fitness": best_fitness,
+            "evaluations": self._counting_problem.evaluations,
+        }
 
     def _require_uniform_population_size(self) -> None:
         """
@@ -234,7 +241,7 @@ class CooperativeDecompositionSolver(Solver):
 
             else:
                 self._sub_problems.append(
-                    SubSpaceProblem(self.problem, self._context, k, group))
+                    SubSpaceProblem(self._counting_problem, self._context, k, group))
 
     def _perform_regroup(self, new_groups: List[List[int]]) -> None:
         """

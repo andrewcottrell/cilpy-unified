@@ -70,6 +70,31 @@ class FixedIntervalTrigger(RegroupTrigger):
         return has_started and is_interval_boundary
 
 
+class EvaluationIntervalTrigger(RegroupTrigger):
+    """Triggers every fixed amount of fitness evaluations."""
+
+    def __init__(self, interval: int) -> None:
+
+        if interval < 1:
+            raise ValueError(f"interval must be at least 1, but got {interval}")
+
+        self._interval = interval
+        self._next_threshold = interval
+
+
+    def should_trigger(self, state: dict) -> bool:
+
+        return state["evaluations"] >= self._next_threshold
+
+    def on_triggered(self, state: dict) -> None:
+
+
+        self._next_threshold += self._interval
+
+    def reset(self) -> None:
+        self._next_threshold = self._interval
+
+
 class StagnationTrigger(RegroupTrigger):
     """This triggers when the search stops making good progress and begins to stagnate. 
     """
@@ -163,23 +188,24 @@ class NeverTrigger(RegroupTrigger):
         return False
 
 
-def restructure_interval(max_iterations: int, dimension: int, factor: int) -> int:
-    """Calculates how many iterations should be between regroup events.
+def restructure_interval(total_budget: int, dimension: int, factor: int) -> int:
+    """Calculates how much of the budget should be between regroup events.
 
     Args:
-        max_iterations: The total number of iterations in the run.
+        total_budget: The total budget of the run in iterations or in
+            fitness evaluations.
         dimension: Total number of decision variables.
         factor: Amount of parts a group splits into.
 
     Returns:
-        The interval between regroup events in iterations.
+        The interval between regroup events in the same unit as total_budget.
 
     Raises:
-        ValueError: if max_iterations or dimension is below 1 or factor is below 2.
+        ValueError: if total_budget or dimension is below 1 or factor is below 2.
     """
 
-    if max_iterations < 1:
-        raise ValueError(f"max_iterations must be at least 1 but is {max_iterations}")
+    if total_budget < 1:
+        raise ValueError(f"total_budget must be at least 1 but is {total_budget}")
 
     if dimension < 1:
         raise ValueError(f"dimension must be at least 1 but is {dimension}")
@@ -190,6 +216,6 @@ def restructure_interval(max_iterations: int, dimension: int, factor: int) -> in
     number_of_restructures = math.log(dimension) / math.log(factor)
     number_of_phases = 1 + number_of_restructures
 
-    interval = math.floor(round(max_iterations / number_of_phases, 6))
+    interval = math.floor(round(total_budget / number_of_phases, 6))
 
     return max(1, interval)

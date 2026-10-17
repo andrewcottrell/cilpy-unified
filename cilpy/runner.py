@@ -8,6 +8,7 @@ import numpy as np
 from typing import Any, Dict, List, Optional, Tuple, Type, Sequence
 
 from cilpy.problem import Problem, Evaluation
+from cilpy.problem.counting import CountingProblem
 from cilpy.solver import Solver
 from cilpy.compare.metrics import (
     inverted_generational_distance,
@@ -38,6 +39,8 @@ class ExperimentRunner:
       the swarm centroid; collapses toward 0 at convergence.
     * ``relative_error``            — (f_max - best) / (f_max - f_min); 0 at
       the known optimum. Empty when bounds are unknown.
+    * ``evaluations``               — fitness evaluations used so far in this
+      run. Evaluations made by the runner's own measurements are not counted.
 
     Multi-objective columns:
 
@@ -61,15 +64,18 @@ class ExperimentRunner:
     * ``population_diversity``      — as above.
     * ``front``                     — the full Pareto archive as a list of
       objective vectors; useful for plotting convergence over iterations.
+    * ``evaluations``               — as above.
 
     **<problem>_<solver>.summary.out.csv** — one row per run.
 
     Single-objective: ``problem_name``, ``solver_name``, ``run_id``,
-    ``final_best_fitness``, ``final_feasibility_pct``, ``p_red``, ``run_time_s``.
+    ``final_best_fitness``, ``final_feasibility_pct``, ``p_red``, ``run_time_s``,
+    ``evaluations_used``.
 
     Multi-objective: ``problem_name``, ``solver_name``, ``run_id``,
     ``final_archive_size``, ``final_igd``, ``final_gd``, ``final_hypervolume``,
-    ``final_spacing``, ``final_spread``, ``final_feasibility_pct``, ``run_time_s``.
+    ``final_spacing``, ``final_spread``, ``final_feasibility_pct``, ``run_time_s``,
+    ``evaluations_used``.
     """
 
     def __init__(
@@ -77,12 +83,24 @@ class ExperimentRunner:
         problems: Sequence[Problem],
         solver_configurations: List[Dict[str, Any]],
         num_runs: int,
-        max_iterations: int,
+        max_iterations: Optional[int] = None,
+        max_evaluations: Optional[int] = None,
     ):
+
+        if max_iterations is None and max_evaluations is None:
+            raise ValueError("either max_iterations or max_evaluations must be given")
+
+        if max_iterations is not None and max_iterations < 1:
+            raise ValueError(f"max_iterations must be at least 1, but got {max_iterations}")
+
+        if max_evaluations is not None and max_evaluations < 1:
+            raise ValueError(f"max_evaluations must be at least 1, but got {max_evaluations}")
+
         self.problems = problems
         self.solver_configurations = solver_configurations
         self.num_runs = num_runs
         self.max_iterations = max_iterations
+        self.max_evaluations = max_evaluations
 
     # ------------------------------------------------------------------
     # Public interface
@@ -110,7 +128,7 @@ class ExperimentRunner:
                 print(f"\n  -> Starting Experiment: {solver_name} on {problem.name}")
                 print(
                     f"     Configuration: {self.num_runs} runs, "
-                    f"{self.max_iterations} iterations/run."
+                    f"{self._budget_description()}."
                 )
                 print(f"     Results will be saved to: {output_file_path}")
 
@@ -128,6 +146,27 @@ class ExperimentRunner:
     # ------------------------------------------------------------------
     # Shared helpers
     # ------------------------------------------------------------------
+
+    def _budget_description(self) -> str:
+        parts = []
+
+        if self.max_iterations is not None:
+            parts.append(f"{self.max_iterations} iterations/run")
+
+        if self.max_evaluations is not None:
+            parts.append(f"{self.max_evaluations} evaluations/run")
+
+        return " or ".join(parts)
+
+    def _budget_is_used(self, iteration: int, problem: CountingProblem) -> bool:
+
+        if self.max_iterations is not None and iteration >= self.max_iterations:
+            return True
+
+        if self.max_evaluations is not None and problem.evaluations >= self.max_evaluations:
+            return True
+
+        return False
 
     def _is_solution_feasible(self, evaluation: Evaluation, tolerance: float = 1e-6) -> bool:
         if evaluation is None:
@@ -173,6 +212,7 @@ class ExperimentRunner:
         "population_feasibility_pct   [% of current population satisfying all constraints]",
         "population_diversity         [mean distance of particles from swarm centroid]",
         "relative_error               [how far best_fitness is from known optimum; 0=optimal]",
+        "evaluations                  [fitness evaluations used so far in this run]",
     ]
 
     _SO_SUMMARY_HEADER = [
@@ -183,6 +223,7 @@ class ExperimentRunner:
         "final_feasibility_pct        [% feasible in population at the last iteration]",
         "p_red                        [mean relative error distance across all iterations; 0=ideal]",
         "run_time_s",
+        "evaluations_used             [fitness evaluations used in this run]",
     ]
 
     def _so_iteration_row(
@@ -260,6 +301,7 @@ class ExperimentRunner:
         "population_feasibility_pct   [% of current population satisfying all constraints]",
         "population_diversity         [mean distance of particles from swarm centroid]",
         "front                        [full Pareto archive as list of objective vectors; useful for plotting]",
+        "evaluations                  [fitness evaluations used so far in this run]",
     ]
 
     _MO_SUMMARY_HEADER = [
@@ -276,6 +318,7 @@ class ExperimentRunner:
         "final_front_feasibility_pct  [% of returned front members satisfying all constraints]",
         "final_feasible_front         [objective vectors of FEASIBLE front members only; for honest cross-algorithm HV]",
         "run_time_s",
+        "evaluations_used             [fitness evaluations used in this run]",
     ]
 
     def _mo_iteration_row(
@@ -441,6 +484,10 @@ class ExperimentRunner:
 
         current_params = solver_params.copy()
 
+        # A fresh counter for every run, so each run starts at 0 evaluations
+        counted_problem = CountingProblem(current_params["problem"])
+        current_params["problem"] = counted_problem
+
         # Only inject constraint_handler when explicitly provided. Solvers like
         # CoevolutionaryLagrangianSolver handle their own constraint logic via
         # **kwargs; injecting None conflicts with their sub-solver constructors.
@@ -457,23 +504,63 @@ class ExperimentRunner:
         relative_error_history: List[float] = []
         hv_ref: Optional[Tuple[float, float]] = None
 
-        for iteration in range(1, self.max_iterations + 1):
+        iteration = 0
+
+        while not self._budget_is_used(iteration, counted_problem):
+            iteration += 1
+            evaluations_before_step = counted_problem.evaluations
+
             solver.problem.begin_iteration()
             solver.step()
 
-            if is_multi_objective:
-                row, hv_ref = self._mo_iteration_row(
-                    run_id, iteration, solver, hv_ref, ref_front
-                )
-            else:
-                row = self._so_iteration_row(
-                    run_id, iteration, solver,
-                    bounds_known, f_max, fitness_range, relative_error_history,
+            # Without this check a solver that never evaluates would loop forever
+            no_evaluations_made = counted_problem.evaluations == evaluations_before_step
+            if no_evaluations_made and self.max_iterations is None:
+                raise RuntimeError(
+                    f"{solver_name} made no fitness evaluations in iteration {iteration}, "
+                    "so the evaluation budget can never be reached. Set max_iterations as well."
                 )
 
+            # Measurements must not use up the budget
+            with counted_problem.not_counting():
+                if is_multi_objective:
+                    row, hv_ref = self._mo_iteration_row(
+                        run_id, iteration, solver, hv_ref, ref_front
+                    )
+                else:
+                    row = self._so_iteration_row(
+                        run_id, iteration, solver,
+                        bounds_known, f_max, fitness_range, relative_error_history,
+                    )
+
+            row.append(counted_problem.evaluations)
             main_writer.writerow(row)
 
         run_time = time.time() - run_start_time
+        evaluations_used = counted_problem.evaluations
+
+        with counted_problem.not_counting():
+            self._finish_run(
+                run_id, solver, problem_name, solver_name, summary_file_path,
+                is_multi_objective, relative_error_history, hv_ref, ref_front,
+                run_time, evaluations_used,
+            )
+
+    def _finish_run(
+        self,
+        run_id: int,
+        solver: Solver,
+        problem_name: str,
+        solver_name: str,
+        summary_file_path: str,
+        is_multi_objective: bool,
+        relative_error_history: List[float],
+        hv_ref: Optional[Tuple[float, float]],
+        ref_front: Optional[np.ndarray],
+        run_time: float,
+        evaluations_used: int,
+    ):
+        """Prints the console summary for a run and appends its summary row."""
 
         # --- Console summary ---
         if is_multi_objective:
@@ -487,14 +574,16 @@ class ExperimentRunner:
                     pass
             print(
                 f"     Run {run_id} finished in {run_time:.2f}s. "
-                f"Archive size: {len(result)}{igd_console}"
+                f"Archive size: {len(result)}{igd_console} "
+                f"({evaluations_used} evaluations)"
             )
         else:
             result = solver.get_result()
             final_fitness = result[0][1].fitness if result else "N/A"
             print(
                 f"     Run {run_id} finished in {run_time:.2f}s. "
-                f"Best fitness: {final_fitness}"
+                f"Best fitness: {final_fitness} "
+                f"({evaluations_used} evaluations)"
             )
             if relative_error_history:
                 b = np.array(relative_error_history)
@@ -507,15 +596,18 @@ class ExperimentRunner:
         with open(summary_file_path, "a", newline="") as f_sum:
             w = csv.writer(f_sum)
             if is_multi_objective:
-                w.writerow(self._mo_summary_row(
+                summary_row = self._mo_summary_row(
                     problem_name, solver_name, run_id, solver,
                     hv_ref, ref_front, run_time
-                ))
+                )
             else:
-                w.writerow(self._so_summary_row(
+                summary_row = self._so_summary_row(
                     problem_name, solver_name, run_id, solver,
                     relative_error_history, run_time
-                ))
+                )
+
+            summary_row.append(evaluations_used)
+            w.writerow(summary_row)
 
     def _run_single_experiment(
         self,

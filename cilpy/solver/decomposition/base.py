@@ -275,8 +275,7 @@ class CooperativeDecompositionSolver(Solver):
         for attribute_name, columns_by_dimension in preserved_state.items():
             self._apply_state_columns(attribute_name, columns_by_dimension)
 
-        for sub_solver in self._sub_solvers:
-            sub_solver.refresh_evaluations()
+
 
         self._last_regroup_iteration = self._iteration
 

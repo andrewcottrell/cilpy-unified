@@ -103,20 +103,24 @@ class CooperativeDecompositionSolver(Solver):
     def step(self) -> None:
         self._iteration += 1
 
-        assembled_fitness = self._counting_problem.evaluate(
-            self._context.get_full_vector()).fitness
+        assembled_evaluation = self._counting_problem.evaluate(self._context.get_full_vector())
 
         for k, sub_solver in enumerate(self._sub_solvers):
             sub_solver.refresh_evaluations()
+
+            # The sub-solver's best is never worse than its part of the context
+            full_vector = self._context.get_full_vector()
+            context_part = [full_vector[d] for d in self._groups[k]]
+            sub_solver.accept_best(context_part, assembled_evaluation)
+
             sub_solver.step()
             best_sub_solution, best_sub_evaluation = sub_solver.get_result()[0]
-            candidate_fitness = best_sub_evaluation.fitness
 
-            if self._accepts_context_update(candidate_fitness, assembled_fitness):
+            if self._accepts_context_update(best_sub_evaluation.fitness, assembled_evaluation.fitness):
                 self._context.update_group(k, best_sub_solution)
-                assembled_fitness = candidate_fitness
+                assembled_evaluation = best_sub_evaluation
 
-        self._best_fitness_history.append(assembled_fitness)
+        self._best_fitness_history.append(assembled_evaluation.fitness)
 
         self._post_step_hook()
 

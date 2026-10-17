@@ -153,6 +153,14 @@ class PSO(Solver[List[float], float]):
         self.gbest_position = copy.deepcopy(self.pbest_positions[best_idx])
         self.gbest_evaluation = copy.deepcopy(self.pbest_evaluations[best_idx])
 
+    def accept_best(self, solution: List[float], evaluation: Evaluation[float]) -> None:
+        """Makes the solution the global best if it is at least as good as the current one."""
+
+        if not self.comparator.is_better(self.gbest_evaluation, evaluation):
+
+            self.gbest_position = copy.deepcopy(solution)
+            self.gbest_evaluation = copy.deepcopy(evaluation)
+
     def get_result(self) -> List[Tuple[List[float], Evaluation[float]]]:
         """Returns the global best solution found by the swarm."""
         return [(self.gbest_position, self.gbest_evaluation)]

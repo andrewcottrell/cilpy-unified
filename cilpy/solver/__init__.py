@@ -148,6 +148,15 @@ class Solver(ABC, Generic[SolutionType, FitnessType]):
         """
         pass
 
+    def accept_best(self, solution: SolutionType, evaluation: Evaluation[FitnessType]) -> None:
+        """Gives the solver a known good solution so that its best is never worse than it
+
+        Args:
+            solution: The known good solution.
+            evaluation: The evaluation of that solution.
+        """
+        pass
+
     def get_population_evaluations(self) -> List[Evaluation[FitnessType]]:
         """
         Returns the evaluations of the entire current population or set of

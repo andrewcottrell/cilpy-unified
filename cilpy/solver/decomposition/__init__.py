@@ -9,8 +9,8 @@ from cilpy.solver.decomposition.grouping import (
     RandomGroupSizeGrouping, GroupSplitter, EvenSplitter,
     RandomSplitter, GroupMerger, EvenMerger, RandomMerger)
 from cilpy.solver.decomposition.trigger import (
-    RegroupTrigger, FixedIntervalTrigger, StagnationTrigger,
-    NeverTrigger, restructure_interval)
+    RegroupTrigger, FixedIntervalTrigger, EvaluationIntervalTrigger,
+    StagnationTrigger, NeverTrigger, restructure_interval, restructure_trigger)
 from cilpy.solver.decomposition.base import CooperativeDecompositionSolver
 from cilpy.solver.decomposition.cpso import StandardCooperativeSolver
 from cilpy.solver.decomposition.drg import DynamicRandomGroupingSolver
@@ -32,9 +32,11 @@ __all__ = [
     "RandomMerger",
     "RegroupTrigger",
     "FixedIntervalTrigger",
+    "EvaluationIntervalTrigger",
     "StagnationTrigger",
     "NeverTrigger",
     "restructure_interval",
+    "restructure_trigger",
     "CooperativeDecompositionSolver",
     "StandardCooperativeSolver",
     "DynamicRandomGroupingSolver",

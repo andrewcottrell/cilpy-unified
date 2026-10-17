@@ -7,7 +7,7 @@ from cilpy.solver import Solver
 from cilpy.solver.chm import ConstraintHandler
 from cilpy.solver.decomposition.base import CooperativeDecompositionSolver
 from cilpy.solver.decomposition.grouping import (EvenSplitter, GroupingStrategy, GroupSplitter, StaticEvenGrouping)
-from cilpy.solver.decomposition.trigger import (FixedIntervalTrigger, RegroupTrigger, restructure_interval)
+from cilpy.solver.decomposition.trigger import (RegroupTrigger, restructure_trigger)
 
 class DecompositionCooperativeSolver(CooperativeDecompositionSolver):
     """Cooperative solver that starts with one group and keeps splitting it."""
@@ -23,12 +23,18 @@ class DecompositionCooperativeSolver(CooperativeDecompositionSolver):
         group_splitter: Optional[GroupSplitter] = None,
         regroup_trigger: Optional[RegroupTrigger] = None,
         max_iterations: Optional[int] = None,
+        max_evaluations: Optional[int] = None,
         constraint_handler: Optional[ConstraintHandler] = None,
         **kwargs,
     ):
 
-        if regroup_trigger is None and max_iterations is None:
-            raise ValueError("either regroup_trigger or max_iterations must be given")
+        if regroup_trigger is None:
+            if max_iterations is None and max_evaluations is None:
+                raise ValueError(
+                    "either regroup_trigger, max_iterations or max_evaluations must be given")
+
+            if max_iterations is not None and max_evaluations is not None:
+                raise ValueError("give either max_iterations or max_evaluations, not both")
 
         super().__init__(
             problem=problem,
@@ -45,9 +51,9 @@ class DecompositionCooperativeSolver(CooperativeDecompositionSolver):
         self._group_splitter = group_splitter or EvenSplitter(split_factor=2)
 
         if regroup_trigger is None:
-            interval = restructure_interval(
-                max_iterations, problem.dimension, self._group_splitter.split_factor)
-            regroup_trigger = FixedIntervalTrigger(interval=interval)
+            regroup_trigger = restructure_trigger(
+                problem.dimension, self._group_splitter.split_factor,
+                max_iterations=max_iterations, max_evaluations=max_evaluations)
 
         self._regroup_trigger = regroup_trigger
         self._regroup_trigger.reset()

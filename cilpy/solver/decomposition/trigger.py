@@ -2,6 +2,7 @@
 """Regroup triggers for cooperative decomposition solvers."""
 
 import math
+from typing import Optional
 from abc import ABC, abstractmethod
 
 class RegroupTrigger(ABC):
@@ -219,3 +220,27 @@ def restructure_interval(total_budget: int, dimension: int, factor: int) -> int:
     interval = math.floor(round(total_budget / number_of_phases, 6))
 
     return max(1, interval)
+
+
+def restructure_trigger(dimension: int, factor: int, max_iterations: Optional[int] = None,
+                        max_evaluations: Optional[int] = None) -> RegroupTrigger:
+    """Creates a trigger that spaces the restructures evenly over the budget.
+
+    Args:
+        dimension: number of decision variables
+        factor: Amount of parts a group splits into
+        max_iterations: The iteration budget of the run.
+        max_evaluations: The fitness evaluation budget of the run.
+
+    Returns:
+        An EvaluationIntervalTrigger for an evaluation budget
+    """
+
+    if max_evaluations is not None:
+        
+        interval = restructure_interval(max_evaluations, dimension, factor)
+        return EvaluationIntervalTrigger(interval=interval)
+
+    interval = restructure_interval(max_iterations, dimension, factor)
+
+    return FixedIntervalTrigger(interval=interval)

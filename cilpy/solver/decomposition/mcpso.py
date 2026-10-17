@@ -5,7 +5,7 @@ from cilpy.solver import Solver
 from cilpy.solver.chm import ConstraintHandler
 from cilpy.solver.decomposition.base import CooperativeDecompositionSolver
 from cilpy.solver.decomposition.grouping import (EvenMerger, GroupingStrategy, GroupMerger, StaticEvenGrouping)
-from cilpy.solver.decomposition.trigger import (FixedIntervalTrigger, RegroupTrigger, restructure_interval)
+from cilpy.solver.decomposition.trigger import (RegroupTrigger, restructure_trigger)
 
 class MergingCooperativeSolver(CooperativeDecompositionSolver):
     """Cooperative solver that starts with one group per dimension and keeps merging them."""
@@ -21,12 +21,18 @@ class MergingCooperativeSolver(CooperativeDecompositionSolver):
         group_merger: Optional[GroupMerger] = None,
         regroup_trigger: Optional[RegroupTrigger] = None,
         max_iterations: Optional[int] = None,
+        max_evaluations: Optional[int] = None,
         constraint_handler: Optional[ConstraintHandler] = None,
         **kwargs,
     ):
 
-        if regroup_trigger is None and max_iterations is None:
-            raise ValueError("either regroup_trigger or max_iterations must be given")
+        if regroup_trigger is None:
+            if max_iterations is None and max_evaluations is None:
+                raise ValueError(
+                    "either regroup_trigger, max_iterations or max_evaluations must be given")
+
+            if max_iterations is not None and max_evaluations is not None:
+                raise ValueError("give either max_iterations or max_evaluations, not both")
 
         if num_groups is None:
             num_groups = problem.dimension
@@ -46,9 +52,9 @@ class MergingCooperativeSolver(CooperativeDecompositionSolver):
         self._group_merger = group_merger or EvenMerger(merge_factor=2)
 
         if regroup_trigger is None:
-            interval = restructure_interval(
-                max_iterations, problem.dimension, self._group_merger.merge_factor)
-            regroup_trigger = FixedIntervalTrigger(interval=interval)
+            regroup_trigger = restructure_trigger(
+                problem.dimension, self._group_merger.merge_factor,
+                max_iterations=max_iterations, max_evaluations=max_evaluations)
 
         self._regroup_trigger = regroup_trigger
         self._regroup_trigger.reset()

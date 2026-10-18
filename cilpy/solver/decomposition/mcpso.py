@@ -78,5 +78,4 @@ class MergingCooperativeSolver(CooperativeDecompositionSolver):
             new_groups = self._group_merger.merge(self._groups, state)
 
             self._perform_regroup(new_groups)
-            self._give_new_velocities()
             self._regroup_trigger.on_triggered(state)

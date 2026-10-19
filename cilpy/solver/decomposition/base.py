@@ -15,9 +15,25 @@ from cilpy.solver.decomposition.sub_problem import SubSpaceProblem
 
 PER_DIMENSION_STATE_ATTRIBUTES = ("population", "velocities", "pbest_positions")
 
+class PlaceholderProblem(Problem):
+    """A placegolder sub-problem that never evaluates the real function"""
+
+    def __init__(self, sub_problem: SubSpaceProblem) -> None:
+        super().__init__(sub_problem.dimension, sub_problem.bounds, sub_problem.name)
+        self._sub_problem = sub_problem
+
+    def evaluate(self, solution) -> Evaluation:
+        return Evaluation(fitness=float("inf"))
+
+    def is_dynamic(self) -> Tuple[bool, bool]:
+        return self._sub_problem.is_dynamic()
+
+    def is_multi_objective(self) -> bool:
+        return self._sub_problem.is_multi_objective()
+
+
 class CooperativeDecompositionSolver(Solver):
-    """Abstract base that partitions a D-dim problem into sub-problems.
-    """
+    """Abstract base that partitions a D-dim problem into sub-problems."""
 
     def __init__(
         self,
@@ -77,15 +93,21 @@ class CooperativeDecompositionSolver(Solver):
         sub_solver_class: Type[Solver],
         sub_solver_params: dict,
         num_groups: int,
+        evaluate_starting_population: bool = True,
     ) -> List[Solver]:
         solvers = []
         base_name = sub_solver_params.get("name", self.name)
         for k in range(num_groups):
             params = dict(sub_solver_params)
             params["name"] = f"{base_name}_sub{k}"
-            solvers.append(
-                sub_solver_class(problem=self._sub_problems[k], **params)
-            )
+
+            if evaluate_starting_population:
+                solver = sub_solver_class(problem=self._sub_problems[k], **params)
+            else:
+                solver = sub_solver_class(problem=PlaceholderProblem(self._sub_problems[k]), **params)
+                solver.problem = self._sub_problems[k]
+
+            solvers.append(solver)
         return solvers
 
     def _sync_context(self) -> None:
@@ -274,7 +296,8 @@ class CooperativeDecompositionSolver(Solver):
         self._rebuild_sub_problems(new_groups)
 
         self._sub_solvers = self._instantiate_sub_solvers(
-            self._sub_solver_class, self._sub_solver_params, len(new_groups))
+            self._sub_solver_class, self._sub_solver_params, len(new_groups),
+            evaluate_starting_population=False)
 
         for attribute_name, columns_by_dimension in preserved_state.items():
             self._apply_state_columns(attribute_name, columns_by_dimension)

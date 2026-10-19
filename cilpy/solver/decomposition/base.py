@@ -275,7 +275,6 @@ class CooperativeDecompositionSolver(Solver):
 
         Args:
             new_groups: The new assignments of range=dimension into groups.
-                The number of groups may differ from the current grouping.
         """
 
         self._require_uniform_population_size()

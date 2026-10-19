@@ -323,6 +323,20 @@ class CooperativeDecompositionSolver(Solver):
                     span_size = upper_bounds[d] - lower_bounds[d]
                     velocity[d] = random.uniform(-span_size, span_size)
 
+    def _give_new_positions(self) -> None:
+
+        for sub_solver in self._sub_solvers:
+
+            if hasattr(sub_solver, "velocities"):
+                continue
+
+            lower_bounds, upper_bounds = sub_solver.problem.bounds
+
+            for individual in sub_solver.population[1:]:
+
+                for d in range(len(individual)):
+                    individual[d] = random.uniform(lower_bounds[d], upper_bounds[d])
+
     def get_population(self) -> List[List[float]]:
         expanded = []
 

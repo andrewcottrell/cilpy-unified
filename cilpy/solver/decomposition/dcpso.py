@@ -82,4 +82,5 @@ class DecompositionCooperativeSolver(CooperativeDecompositionSolver):
 
             self._perform_regroup(new_groups)
             self._give_new_velocities()
+            self._give_new_positions()
             self._regroup_trigger.on_triggered(state)

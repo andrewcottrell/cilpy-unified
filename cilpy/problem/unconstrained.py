@@ -448,6 +448,12 @@ class Griewank(Problem[List[float], float]):
         return Evaluation(fitness=fitness)
 
     def is_dynamic(self) -> Tuple[bool, bool]:
+        """Indicates that the Griewank function is not dynamic.
+
+        Returns:
+            Tuple[bool, bool]: A tuple `(False, False)` as the function is
+                static.
+        """
         
         return (False, False)
 
@@ -461,7 +467,7 @@ class Griewank(Problem[List[float], float]):
 
         lower_bound = self.bounds[0][0]
         upper_bound = self.bounds[1][0]
-        
+
         limit = max(abs(lower_bound), abs(upper_bound))
 
         worst_fitness = self.dimension * limit**2 / 4000 + 2

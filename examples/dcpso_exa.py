@@ -5,7 +5,7 @@ from cilpy.solver.decomposition.dcpso import DecompositionCooperativeSolver
 from cilpy.solver.decomposition.grouping import RandomSplitter
 from cilpy.solver.pso import PSO
 
-DIMENSION = 100
+DIMENSION = 500
 NUM_GROUPS = 6
 SUB_SWARM_SIZE = 10
 TOTAL_PARTICLES = NUM_GROUPS * SUB_SWARM_SIZE

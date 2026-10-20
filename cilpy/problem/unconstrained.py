@@ -400,6 +400,59 @@ class Rosenbrock(Problem[List[float], float]):
         return (best_fitness, worst_fitness)
 
 
+class Griewank(Problem[List[float], float]):
+    """The Griewank function.
+
+    A multimodal, non-separable benchmark function with many regularly spaced
+    local minima. The global minimum is at the origin (0, ..., 0) with a
+    fitness value of 0.
+
+    The function is defined as:
+    f(x) = Sum(x_i^2) / 4000 - Prod(cos(x_i / sqrt(i))) + 1 for i = 1 to n
+    """
+
+    def __init__(self, dimension: int = 2, domain: Tuple[float, float] = (-600, 600)):
+        """Initializes a Griewank function problem instance.
+
+        Args:
+            dimension: The number of decision variables (dimensions). Defaults
+                to 2.
+            domain: A tuple `(min_val, max_val)` defining the symmetric search
+                space boundary for each dimension. Defaults to (-600, 600).
+        """
+        lower_bounds = [domain[0]] * dimension
+        upper_bounds = [domain[1]] * dimension
+        super().__init__(
+            dimension=dimension, bounds=(lower_bounds, upper_bounds), name="Griewank"
+        )
+
+    def evaluate(self, solution: List[float]) -> Evaluation[float]:
+        """Evaluates the Griewank function for a given solution.
+
+        Args:
+            solution: A list of floats representing the decision
+                variables of the candidate solution.
+
+        Returns:
+            Evaluation: An Evaluation object containing the fitness
+        """
+
+        sum_of_squares = 0.0
+        product_of_cosines = 1.0
+
+        for i, x in enumerate(solution, start=1):
+            sum_of_squares += x**2
+            product_of_cosines *= math.cos(x / math.sqrt(i))
+
+        fitness = sum_of_squares / 4000 - product_of_cosines + 1
+        return Evaluation(fitness=fitness)
+
+    def is_dynamic(self) -> Tuple[bool, bool]:
+        """Indicates that the Griewank function is not dynamic.
+        """
+        return (False, False)
+
+
 if __name__ == "__main__":
     my_sphere = Sphere(2, (-5.12, 5.12))
     print(my_sphere.evaluate([0, 0]))

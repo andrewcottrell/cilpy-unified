@@ -448,9 +448,25 @@ class Griewank(Problem[List[float], float]):
         return Evaluation(fitness=fitness)
 
     def is_dynamic(self) -> Tuple[bool, bool]:
-        """Indicates that the Griewank function is not dynamic.
-        """
+        
         return (False, False)
+
+    def is_multi_objective(self) -> bool:
+        """Indicates that the function is not multi-objective."""
+        return False
+
+    def get_fitness_bounds(self) -> Tuple[float, float]:
+
+        best_fitness = 0.0
+
+        lower_bound = self.bounds[0][0]
+        upper_bound = self.bounds[1][0]
+        
+        limit = max(abs(lower_bound), abs(upper_bound))
+
+        worst_fitness = self.dimension * limit**2 / 4000 + 2
+
+        return (best_fitness, worst_fitness)
 
 
 if __name__ == "__main__":

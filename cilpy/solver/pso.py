@@ -2,10 +2,12 @@
 
 import copy
 import random
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from cilpy.problem import Problem, Evaluation
 from cilpy.solver import Solver
+
+BOUND_HANDLING_OPTIONS = ("clamp", "reflect", "none")
 
 
 class PSO(Solver[List[float], float]):
@@ -24,6 +26,8 @@ class PSO(Solver[List[float], float]):
         w: float,
         c1: float,
         c2: float,
+        max_velocity: Optional[float] = None,
+        bound_handling: str = "clamp",
         **kwargs,
     ):
         """
@@ -42,10 +46,20 @@ class PSO(Solver[List[float], float]):
                PSO).
         """
         super().__init__(problem, name)
+
+        if bound_handling not in BOUND_HANDLING_OPTIONS:
+            raise ValueError(
+                f"bound_handling must be one of {BOUND_HANDLING_OPTIONS}, not {bound_handling!r}")
+
+        if max_velocity is not None and max_velocity <= 0:
+            raise ValueError(f"max_velocity must be positive, not {max_velocity}")
+
         self.swarm_size = swarm_size
         self.w = w
         self.c1 = c1
         self.c2 = c2
+        self.max_velocity = max_velocity
+        self.bound_handling = bound_handling
 
         lower_bounds, upper_bounds = self.problem.bounds
 
@@ -107,22 +121,21 @@ class PSO(Solver[List[float], float]):
                 )
                 inertia_component = self.w * self.velocities[i][d]
 
-                self.velocities[i][d] = (
-                    inertia_component + cognitive_component + social_component
-                )
+                velocity = inertia_component + cognitive_component + social_component
+                self.velocities[i][d] = self._limit_velocity(velocity, d)
 
             # 2. Update Position
             for d in range(self.problem.dimension):
-                self.population[i][d] += self.velocities[i][d]
-                # Clamp position to stay within bounds
-                self.population[i][d] = max(
-                    lower_bounds[d], min(self.population[i][d], upper_bounds[d])
-                )
+                position = self.population[i][d] + self.velocities[i][d]
+                self.population[i][d] = self._handle_bounds(position, lower_bounds[d], upper_bounds[d])
 
             # 3. Evaluate new position
             self.evaluations[i] = self.problem.evaluate(self.population[i])
 
             # 4. Update Personal Best (pbest)
+            if self.bound_handling == "none" and not self._is_inside_bounds(self.population[i]):
+                continue
+
             if self.comparator.is_better(
                 self.evaluations[i], self.pbest_evaluations[i]
             ):
@@ -135,6 +148,44 @@ class PSO(Solver[List[float], float]):
                 ):
                     self.gbest_position = copy.deepcopy(self.pbest_positions[i])
                     self.gbest_evaluation = copy.deepcopy(self.pbest_evaluations[i])
+
+    def _limit_velocity(self, velocity: float, d: int) -> float:
+
+        if self.max_velocity is None:
+            return velocity
+
+        lower_bounds, upper_bounds = self.problem.bounds
+        limit = self.max_velocity * (upper_bounds[d] - lower_bounds[d])
+
+        return max(-limit, min(velocity, limit))
+
+    def _handle_bounds(self, position: float, lower: float, upper: float) -> float:
+
+        if self.bound_handling == "none":
+            return position
+
+        if self.bound_handling == "reflect":
+            
+            if position > upper:
+                position = 2 * upper - position
+
+
+            elif position < lower:
+                position = 2 * lower - position
+
+        # Clamp
+        return max(lower, min(position, upper))
+
+    def _is_inside_bounds(self, position: List[float]) -> bool:
+        
+        lower_bounds, upper_bounds = self.problem.bounds
+
+        for d, value in enumerate(position):
+            
+            if value < lower_bounds[d] or value > upper_bounds[d]:
+                return False
+
+        return True
 
     def refresh_evaluations(self) -> None:
         """Re-evaluates stored personal-best fitness values under the

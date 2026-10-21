@@ -502,6 +502,23 @@ class Elliptic(Problem[List[float], float]):
     def is_multi_objective(self) -> bool:
         return False
 
+    def get_fitness_bounds(self) -> Tuple[float, float]:
+        best_fitness = 0.0
+
+        lower_bound = self.bounds[0][0]
+        upper_bound = self.bounds[1][0]
+        limit = max(abs(lower_bound), abs(upper_bound))
+
+        last_index = max(1, self.dimension - 1)
+        total_weight = 0.0
+        for i in range(self.dimension):
+            total_weight += (10**6) ** (i / last_index)
+
+        worst_fitness = total_weight * limit**2
+
+        return (best_fitness, worst_fitness)
+
+
 
 if __name__ == "__main__":
     my_sphere = Sphere(2, (-5.12, 5.12))

@@ -486,6 +486,7 @@ class Elliptic(Problem[List[float], float]):
         )
 
     def evaluate(self, solution: List[float]) -> Evaluation[float]:
+        """"Evaluates the Elliptic function for a given solution."""
         
         last_index = max(1, len(solution) - 1)
         fitness = 0.0
@@ -497,9 +498,11 @@ class Elliptic(Problem[List[float], float]):
         return Evaluation(fitness=fitness)
 
     def is_dynamic(self) -> Tuple[bool, bool]:
+        """Indicates that the Griewank function is not dynamic"""
         return (False, False)
 
     def is_multi_objective(self) -> bool:
+        """Indicates that the function is not multi-objective."""
         return False
 
     def get_fitness_bounds(self) -> Tuple[float, float]:

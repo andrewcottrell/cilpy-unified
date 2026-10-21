@@ -475,6 +475,28 @@ class Griewank(Problem[List[float], float]):
         return (best_fitness, worst_fitness)
 
 
+class Elliptic(Problem[List[float], float]):
+    """The high-conditioned Elliptic function"""
+
+    def __init__(self, dimension: int = 2, domain: Tuple[float, float] = (-100, 100)):
+        lower_bounds = [domain[0]] * dimension
+        upper_bounds = [domain[1]] * dimension
+        super().__init__(
+            dimension=dimension, bounds=(lower_bounds, upper_bounds), name="Elliptic"
+        )
+
+    def evaluate(self, solution: List[float]) -> Evaluation[float]:
+        
+        last_index = max(1, len(solution) - 1)
+        fitness = 0.0
+
+        for i, x in enumerate(solution):
+            weight = (10**6) ** (i / last_index)
+            fitness += weight * x**2
+
+        return Evaluation(fitness=fitness)
+
+
 if __name__ == "__main__":
     my_sphere = Sphere(2, (-5.12, 5.12))
     print(my_sphere.evaluate([0, 0]))

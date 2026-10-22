@@ -597,8 +597,34 @@ class Schwefel2_26(Problem[List[float], float]):
             total += x * math.sin(math.sqrt(abs(x)))
 
         fitness = 418.9829 * len(solution) - total
-        
+
         return Evaluation(fitness=fitness)
+
+    def is_dynamic(self) -> Tuple[bool, bool]:
+        return (False, False)
+
+    def is_multi_objective(self) -> bool:
+        return False
+
+    def get_fitness_bounds(self) -> Tuple[float, float]:
+        
+        best_fitness = 0.0
+
+        lower_bound = self.bounds[0][0]
+        upper_bound = self.bounds[1][0]
+
+        number_of_points = 100001
+        step = (upper_bound - lower_bound) / (number_of_points - 1)
+        worst_per_dimension = 0.0
+
+        for i in range(number_of_points):
+            x = lower_bound + i * step
+            value = 418.9829 - x * math.sin(math.sqrt(abs(x)))
+            worst_per_dimension = max(worst_per_dimension, value)
+
+        worst_fitness = self.dimension * worst_per_dimension
+
+        return (best_fitness, worst_fitness)
 
 
 

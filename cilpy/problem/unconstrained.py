@@ -528,7 +528,7 @@ class Schwefel2_22(Problem[List[float], float]):
     def __init__(self, dimension: int = 2, domain: Tuple[float, float] = (-10, 10)):
         lower_bounds = [domain[0]] * dimension
         upper_bounds = [domain[1]] * dimension
-        
+
         super().__init__(
             dimension=dimension, bounds=(lower_bounds, upper_bounds), name="Schwefel2_22")
 
@@ -543,6 +543,30 @@ class Schwefel2_22(Problem[List[float], float]):
 
         fitness = sum_of_absolutes + product_of_absolutes
         return Evaluation(fitness=fitness)
+
+    def is_dynamic(self) -> Tuple[bool, bool]:
+
+        return (False, False)
+
+    def is_multi_objective(self) -> bool:
+        return False
+
+    def get_fitness_bounds(self) -> Tuple[float, float]:
+        
+        best_fitness = 0.0
+
+        lower_bound = self.bounds[0][0]
+        upper_bound = self.bounds[1][0]
+        limit = float(max(abs(lower_bound), abs(upper_bound)))
+
+        try:
+            worst_product = limit**self.dimension
+        except OverflowError:
+            worst_product = float("inf")
+
+        worst_fitness = self.dimension * limit + worst_product
+
+        return (best_fitness, worst_fitness)
 
 
 

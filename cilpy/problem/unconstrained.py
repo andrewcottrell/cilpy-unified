@@ -522,6 +522,29 @@ class Elliptic(Problem[List[float], float]):
         return (best_fitness, worst_fitness)
 
 
+class Schwefel2_22(Problem[List[float], float]):
+    """The Schwefel 2.22 function."""
+
+    def __init__(self, dimension: int = 2, domain: Tuple[float, float] = (-10, 10)):
+        lower_bounds = [domain[0]] * dimension
+        upper_bounds = [domain[1]] * dimension
+        
+        super().__init__(
+            dimension=dimension, bounds=(lower_bounds, upper_bounds), name="Schwefel2_22")
+
+    def evaluate(self, solution: List[float]) -> Evaluation[float]:
+
+        sum_of_absolutes = 0.0
+        product_of_absolutes = 1.0
+
+        for x in solution:
+            sum_of_absolutes += abs(x)
+            product_of_absolutes *= abs(x)
+
+        fitness = sum_of_absolutes + product_of_absolutes
+        return Evaluation(fitness=fitness)
+
+
 
 if __name__ == "__main__":
     my_sphere = Sphere(2, (-5.12, 5.12))

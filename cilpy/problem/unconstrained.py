@@ -486,7 +486,7 @@ class Elliptic(Problem[List[float], float]):
         )
 
     def evaluate(self, solution: List[float]) -> Evaluation[float]:
-        """"Evaluates the Elliptic function for a given solution."""
+        """Evaluates the Elliptic function for a given solution."""
         
         last_index = max(1, len(solution) - 1)
         fitness = 0.0
@@ -578,6 +578,27 @@ class Schwefel2_22(Problem[List[float], float]):
         worst_fitness = self.dimension * limit + worst_product
 
         return (best_fitness, worst_fitness)
+
+
+class Schwefel2_26(Problem[List[float], float]):
+    """The Schwefel 2.26 function """
+
+    def __init__(self, dimension: int = 2, domain: Tuple[float, float] = (-500, 500)):
+        lower_bounds = [domain[0]] * dimension
+        upper_bounds = [domain[1]] * dimension
+
+        super().__init__(
+            dimension=dimension, bounds=(lower_bounds, upper_bounds), name="Schwefel2_26")
+
+    def evaluate(self, solution: List[float]) -> Evaluation[float]:
+        total = 0.0
+
+        for x in solution:
+            total += x * math.sin(math.sqrt(abs(x)))
+
+        fitness = 418.9829 * len(solution) - total
+        
+        return Evaluation(fitness=fitness)
 
 
 

@@ -523,9 +523,18 @@ class Elliptic(Problem[List[float], float]):
 
 
 class Schwefel2_22(Problem[List[float], float]):
-    """The Schwefel 2.22 function."""
+    """The Schwefel 2.22 function.
+
+    A unimodal and non-separable benchmark function. The global minimum is at the
+    origin with a fitness value of 0.
+
+    The function is defined as:
+    f(x) =  Sum(|x_i|) + Prod(|x_i|) for i = 1 to n
+    """
 
     def __init__(self, dimension: int = 2, domain: Tuple[float, float] = (-10, 10)):
+        """Initializes a Schwefel 2.22 function problem instance.
+        """
         lower_bounds = [domain[0]] * dimension
         upper_bounds = [domain[1]] * dimension
 
@@ -533,6 +542,7 @@ class Schwefel2_22(Problem[List[float], float]):
             dimension=dimension, bounds=(lower_bounds, upper_bounds), name="Schwefel2_22")
 
     def evaluate(self, solution: List[float]) -> Evaluation[float]:
+        """Evaluates the Schwefel 2.22 function for a given solution."""
 
         sum_of_absolutes = 0.0
         product_of_absolutes = 1.0
@@ -545,14 +555,15 @@ class Schwefel2_22(Problem[List[float], float]):
         return Evaluation(fitness=fitness)
 
     def is_dynamic(self) -> Tuple[bool, bool]:
-
+        """Indicates that the function is not dynamic."""
         return (False, False)
 
     def is_multi_objective(self) -> bool:
+        """Indicates that the function is not multi-objective."""
         return False
 
     def get_fitness_bounds(self) -> Tuple[float, float]:
-        
+        """Returns the known theoretical min and max fitness values"""
         best_fitness = 0.0
 
         lower_bound = self.bounds[0][0]
@@ -585,3 +596,6 @@ if __name__ == "__main__":
 
     my_rosenbrock = Rosenbrock(2, (-30, 30))
     print(my_rosenbrock.evaluate([1, 1]))
+
+    my_schwefel = Schwefel2_22(2, (-10, 10))
+    print(my_schwefel.evaluate([0, 0]))

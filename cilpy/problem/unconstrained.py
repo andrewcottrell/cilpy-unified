@@ -730,6 +730,24 @@ class Weierstrass(Problem[List[float], float]):
 
         return Evaluation(fitness=fitness)
 
+    def is_dynamic(self) -> Tuple[bool, bool]:
+        return (False, False)
+
+    def is_multi_objective(self) -> bool:
+        return False
+
+    def get_fitness_bounds(self) -> Tuple[float, float]:
+        best_fitness = 0.0
+
+        sum_of_weights = 0.0
+        for k in range(self.k_max + 1):
+            sum_of_weights += self.a**k
+
+        worst_per_dimension = 2 * sum_of_weights
+        worst_fitness = self.dimension * worst_per_dimension
+
+        return (best_fitness, worst_fitness)
+
 if __name__ == "__main__":
     my_sphere = Sphere(2, (-5.12, 5.12))
     print(my_sphere.evaluate([0, 0]))

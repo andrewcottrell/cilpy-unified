@@ -476,9 +476,16 @@ class Griewank(Problem[List[float], float]):
 
 
 class Elliptic(Problem[List[float], float]):
-    """The high-conditioned Elliptic function"""
+    """The high-conditioned Elliptic function.
+
+    A unimodal and separable benchmark function.
+
+    The function is defined as:
+    f(x) = Sum((10^6)^((i - 1) / (n - 1))*x_i^2) for i = 1 to n
+    """
 
     def __init__(self, dimension: int = 2, domain: Tuple[float, float] = (-100, 100)):
+        """Initializes an Elliptic function problem instance"""
         lower_bounds = [domain[0]] * dimension
         upper_bounds = [domain[1]] * dimension
         super().__init__(
@@ -506,6 +513,10 @@ class Elliptic(Problem[List[float], float]):
         return False
 
     def get_fitness_bounds(self) -> Tuple[float, float]:
+        """Returns the known theoretical min and max fitness values.
+
+        The maximum is reached at any corner of the search space.
+        """
         best_fitness = 0.0
 
         lower_bound = self.bounds[0][0]
@@ -706,6 +717,9 @@ if __name__ == "__main__":
 
     my_rosenbrock = Rosenbrock(2, (-30, 30))
     print(my_rosenbrock.evaluate([1, 1]))
+
+    my_elliptic = Elliptic(2, (-100, 100))
+    print(my_elliptic.evaluate([0, 0]))
 
     my_schwefel = Schwefel2_22(2, (-10, 10))
     print(my_schwefel.evaluate([0, 0]))

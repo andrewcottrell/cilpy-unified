@@ -701,6 +701,34 @@ class Schwefel2_21(Problem[List[float], float]):
 
         return (best_fitness, worst_fitness)
 
+class Weierstrass(Problem[List[float], float]):
+    """The Weierstrass function"""
+
+    def __init__(self, dimension: int = 2, domain: Tuple[float, float] = (-0.5, 0.5)):
+        lower_bounds = [domain[0]] * dimension
+        upper_bounds = [domain[1]] * dimension
+
+        super().__init__(dimension=dimension,
+                         bounds=(lower_bounds, upper_bounds), name="Weierstrass")
+
+        self.a = 0.5
+        self.b = 3
+        self.k_max = 20
+
+    def evaluate(self, solution: List[float]) -> Evaluation[float]:
+        total = 0.0
+
+        for x in solution:
+            for k in range(self.k_max + 1):
+                total += self.a**k * math.cos(2 * math.pi * self.b**k * (x + 0.5))
+
+        offset = 0.0
+        for k in range(self.k_max + 1):
+            offset += self.a**k * math.cos(math.pi * self.b**k)
+
+        fitness = total - len(solution)*offset
+
+        return Evaluation(fitness=fitness)
 
 if __name__ == "__main__":
     my_sphere = Sphere(2, (-5.12, 5.12))

@@ -639,9 +639,23 @@ class Schwefel2_26(Problem[List[float], float]):
 
 
 class Schwefel2_21(Problem[List[float], float]):
-    """The Schwefel 2.21 function"""
+    """The Schwefel 2.21 function
+
+    A unimodal and non-separable benchmark function.
+
+    The function is defined as:
+    f(x) = Max(|x_i|) for i = 1 to n
+    """
 
     def __init__(self, dimension: int = 2, domain: Tuple[float, float] = (-100, 100)):
+        """Initializes a Schwefel 2.21 function problem instance.
+
+        Args:
+            dimension: The number of decision variables (dimensions). Defaults
+                to 2.
+            domain: A tuple `(min_val, max_val)` defining the symmetric search
+                space boundary for each dimension. Defaults to (-100, 100).
+        """
         lower_bounds = [domain[0]] * dimension
         upper_bounds = [domain[1]] * dimension
 
@@ -649,6 +663,7 @@ class Schwefel2_21(Problem[List[float], float]):
             dimension=dimension, bounds=(lower_bounds, upper_bounds), name="Schwefel2_21")
 
     def evaluate(self, solution: List[float]) -> Evaluation[float]:
+        """Evaluates the Schwefel 2.21 function for a given solution."""
         largest_absolute = 0.0
 
         for x in solution:
@@ -658,12 +673,15 @@ class Schwefel2_21(Problem[List[float], float]):
         return Evaluation(fitness=fitness)
 
     def is_dynamic(self) -> Tuple[bool, bool]:
+        """Indicates that the function is not dynamic."""
         return (False, False)
 
     def is_multi_objective(self) -> bool:
+        """Indicates that the function is not multi-objective."""
         return False
 
     def get_fitness_bounds(self) -> Tuple[float, float]:
+        """Returns the known theoretical min and max fitness values"""
         best_fitness = 0.0
 
         lower_bound = self.bounds[0][0]
@@ -694,3 +712,6 @@ if __name__ == "__main__":
 
     my_schwefel_2_26 = Schwefel2_26(2, (-500, 500))
     print(my_schwefel_2_26.evaluate([420.9687, 420.9687]))
+
+    my_schwefel_2_21 = Schwefel2_21(2, (-100, 100))
+    print(my_schwefel_2_21.evaluate([0, 0]))

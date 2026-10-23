@@ -657,6 +657,21 @@ class Schwefel2_21(Problem[List[float], float]):
         fitness = largest_absolute
         return Evaluation(fitness=fitness)
 
+    def is_dynamic(self) -> Tuple[bool, bool]:
+        return (False, False)
+
+    def is_multi_objective(self) -> bool:
+        return False
+
+    def get_fitness_bounds(self) -> Tuple[float, float]:
+        best_fitness = 0.0
+
+        lower_bound = self.bounds[0][0]
+        upper_bound = self.bounds[1][0]
+        worst_fitness = float(max(abs(lower_bound), abs(upper_bound)))
+
+        return (best_fitness, worst_fitness)
+
 
 if __name__ == "__main__":
     my_sphere = Sphere(2, (-5.12, 5.12))

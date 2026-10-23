@@ -1,4 +1,8 @@
 # cilpy/problem/cec2010.py
+"""
+This file wraps the 20 CEC 2010 large-scale functions from the `opfunu` library as
+`Problem` objects so that cilpy solvers can be tested on them.
+"""
 import importlib.resources
 import sys
 import types
@@ -20,15 +24,19 @@ def _load_cec2010():
         from opfunu.cec_based import cec2010
 
     except ImportError as error:
-        raise ImportError(
-            "The CEC 2010 functions need the opfunu library. "
-            "Install it with: pip install opfunu") from error
+        raise ImportError("Install opfunu first") from error
     return cec2010
 
 class CEC2010(Problem[List[float], float]):
+    """A function from the CEC 2010 large-scale benchmark"""
 
     def __init__(self, number: int, dimension: int = 1000):
+        """Initialises a CEC 2010 function.
 
+        Args:
+            number: The function number from 1 to 20
+            dimension: The number of dimensions
+        """
         if number < 1 or number > 20:
             raise ValueError("The function number must be 1 to 20.")
 
@@ -41,16 +49,19 @@ class CEC2010(Problem[List[float], float]):
         super().__init__(dimension, (lower_bounds, upper_bounds), f"CEC2010-F{number}")
 
     def evaluate(self, solution: List[float]) -> Evaluation[float]:
+        """Evaluates the function for a given solution."""
 
         fitness = self.function.evaluate(np.array(solution))
 
         return Evaluation(fitness=float(fitness))
 
     def is_dynamic(self) -> Tuple[bool, bool]:
+        """Indicates that the functions are not dynamic."""
 
         return (False, False)
 
     def is_multi_objective(self) -> bool:
+        """Indicates that the functions are not multi-objective."""
 
         return False
 

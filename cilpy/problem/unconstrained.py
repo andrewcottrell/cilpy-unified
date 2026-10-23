@@ -638,6 +638,25 @@ class Schwefel2_26(Problem[List[float], float]):
         return (best_fitness, worst_fitness)
 
 
+class Schwefel2_21(Problem[List[float], float]):
+    """The Schwefel 2.21 function"""
+
+    def __init__(self, dimension: int = 2, domain: Tuple[float, float] = (-100, 100)):
+        lower_bounds = [domain[0]] * dimension
+        upper_bounds = [domain[1]] * dimension
+
+        super().__init__(
+            dimension=dimension, bounds=(lower_bounds, upper_bounds), name="Schwefel2_21")
+
+    def evaluate(self, solution: List[float]) -> Evaluation[float]:
+        largest_absolute = 0.0
+
+        for x in solution:
+            largest_absolute = max(largest_absolute, abs(x))
+
+        fitness = largest_absolute
+        return Evaluation(fitness=fitness)
+
 
 if __name__ == "__main__":
     my_sphere = Sphere(2, (-5.12, 5.12))

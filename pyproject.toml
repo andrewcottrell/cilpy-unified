@@ -29,6 +29,9 @@ dependencies = [
     "pytest>=8.4.2"
 ]
 
+[project.optional-dependencies]
+cec = ["opfunu==1.0.1"]
+
 [project.urls]
 Homepage = "https://github.com/willieloea/cilpy"
 Issues = "https://github.com/willieloea/cilpy/issues"

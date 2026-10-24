@@ -702,9 +702,17 @@ class Schwefel2_21(Problem[List[float], float]):
         return (best_fitness, worst_fitness)
 
 class Weierstrass(Problem[List[float], float]):
-    """The Weierstrass function"""
+    """The Weierstrass function. Multimodal and separable benchmark function"""
 
     def __init__(self, dimension: int = 2, domain: Tuple[float, float] = (-0.5, 0.5)):
+        """Initializes a Weierstrass function problem instance.
+
+        Args:
+            dimension: The number of decision variables (dimensions). Defaults
+                to 2.
+            domain: A tuple `(min_val, max_val)` defining the symmetric search
+                space boundary for each dimension. Defaults to (-0.5, 0.5).
+        """
         lower_bounds = [domain[0]] * dimension
         upper_bounds = [domain[1]] * dimension
 
@@ -716,12 +724,14 @@ class Weierstrass(Problem[List[float], float]):
         self.k_max = 20
 
     def evaluate(self, solution: List[float]) -> Evaluation[float]:
+        """Evaluates the Weierstrass function for a given solution."""
         total = 0.0
 
         for x in solution:
             for k in range(self.k_max + 1):
                 total += self.a**k * math.cos(2 * math.pi * self.b**k * (x + 0.5))
 
+        # Subtracted so that the minimum is exactly 0
         offset = 0.0
         for k in range(self.k_max + 1):
             offset += self.a**k * math.cos(math.pi * self.b**k)
@@ -731,12 +741,15 @@ class Weierstrass(Problem[List[float], float]):
         return Evaluation(fitness=fitness)
 
     def is_dynamic(self) -> Tuple[bool, bool]:
+        """Indicates that the function is not dynamic."""
         return (False, False)
 
     def is_multi_objective(self) -> bool:
+        """Indicates that the function is not multi-objective."""
         return False
 
     def get_fitness_bounds(self) -> Tuple[float, float]:
+        """Returns the known theoretical min and max fitness values"""
         best_fitness = 0.0
 
         sum_of_weights = 0.0
@@ -775,3 +788,6 @@ if __name__ == "__main__":
 
     my_schwefel_2_21 = Schwefel2_21(2, (-100, 100))
     print(my_schwefel_2_21.evaluate([0, 0]))
+
+    my_weierstrass = Weierstrass(2, (-0.5, 0.5))
+    print(my_weierstrass.evaluate([0, 0]))

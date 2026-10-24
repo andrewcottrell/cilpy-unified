@@ -124,6 +124,7 @@ solver_configs = [
             "name": "MCPSO_stagnation",
             "sub_solver_class": PSO,
             "sub_solver_params": SUB_PSO_PARAMS,
+            "num_groups": START_GROUPS,
             "grouping_strategy": StaticEvenGrouping(),
             "group_merger": EvenMerger(merge_factor=MERGE_FACTOR),
             "regroup_trigger": StagnationTrigger(patience=10, tolerance=1e-4),

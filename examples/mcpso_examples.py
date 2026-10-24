@@ -33,20 +33,7 @@ problems_to_run = [
 # --- 2. Define the solver configurations ---
 solver_configs = [
 
-    # MCPSO, all strategies explicit (static grouping, even merger, evaluation interval)
-    {
-        "class": MergingCooperativeSolver,
-        "params": {
-            "name": "MCPSO",
-            "sub_solver_class": PSO,
-            "sub_solver_params": SUB_PSO_PARAMS,
-            "grouping_strategy": StaticEvenGrouping(),
-            "group_merger": EvenMerger(merge_factor=MERGE_FACTOR),
-            "regroup_trigger": EvaluationIntervalTrigger(interval=EVALUATION_INTERVAL),
-        },
-    },
-
-    # MCPSO, defaults
+    # MCPSO defaults
     {
         "class": MergingCooperativeSolver,
         "params": {

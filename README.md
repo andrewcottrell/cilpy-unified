@@ -31,12 +31,21 @@ including:
   * Single and multi-objective optimization
   * Constrained and unconstrained problems
   * Static and dynamic optimization problems
+  * Large-scale problems, through cooperative decomposition (CPSO, DRG, DCPSO, MCPSO)
+  * Large-scale problems, through cooperative decomposition
+
 
 ### Installing `cilpy`
 `cilpy` can be installed using pip:
 
 ```
 pip install cilpy
+```
+
+To use the CEC 2010 large-scale benchmark functions, install the optional extra:
+
+```
+pip install "cilpy[cec]"
 ```
 
 ### Usage Example
@@ -73,6 +82,7 @@ solver_configs = [
 # --- 3. Define the Experiment parameters ---
 number_of_runs = 30 # how many times an experiment should be repeated
 max_iter = 5000     # how many iterations per experiment
+# or use max_evaluations=... instead, to give every solver the same number of fitness evaluations
 
 # --- 4. Create and run the experiments ---
 runner = ExperimentRunner(
@@ -85,6 +95,40 @@ runner.run_experiments()
 ```
 
 See [examples](examples/) for actual examples of how `cilpy` is used.
+
+### Large-scale Optimization
+
+For problems with many decision variables the cooperative solvers in
+`cilpy.solver.decomposition` split the variables into groups. Each group is
+optimized by its own sub-solver, which can be any `cilpy` solver such as PSO, GA
+or DE. Four approaches are available: static cooperative, dynamic random regrouping,
+decomposition cooperative and merging cooperative.
+
+```python
+from cilpy.solver.decomposition import MergingCooperativeSolver
+from cilpy.solver.pso import PSO
+
+solver_configs = [
+    {
+        "class": MergingCooperativeSolver,
+        "params": {
+            "name": "MCPSO",
+            "sub_solver_class": PSO,
+            "sub_solver_params": {
+                "name": "sub_pso",
+                "swarm_size": 10,
+                "w": 0.7298,
+                "c1": 1.49618,
+                "c2": 1.49618,
+            },
+            "max_evaluations": 100000,
+        },
+    },
+]
+```
+
+See `examples/cpso_examples.py`, `drg_examples.py`, `dcpso_examples.py` and
+`mcpso_examples.py` for the different groupings, triggers, splitters and mergers.
 
 ### Documentation
 

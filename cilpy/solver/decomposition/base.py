@@ -19,16 +19,20 @@ class PlaceholderProblem(Problem):
     """A placegolder sub-problem that never evaluates the real function"""
 
     def __init__(self, sub_problem: SubSpaceProblem) -> None:
+        """Initializes the placeholder"""
         super().__init__(sub_problem.dimension, sub_problem.bounds, sub_problem.name)
         self._sub_problem = sub_problem
 
     def evaluate(self, solution) -> Evaluation:
+        """Returns an infinite fitness without using an evaluation."""
         return Evaluation(fitness=float("inf"))
 
     def is_dynamic(self) -> Tuple[bool, bool]:
+        """Returns whether the real sub-problem is dynamic."""
         return self._sub_problem.is_dynamic()
 
     def is_multi_objective(self) -> bool:
+        """Returns whether the real sub-problem is multi-objective."""
         return self._sub_problem.is_multi_objective()
 
 
@@ -47,6 +51,7 @@ class CooperativeDecompositionSolver(Solver):
         only_accept_improvements: bool = False,
         **kwargs,
     ):
+        """Initializes the cooperative solver"""
         super().__init__(problem, name, constraint_handler)
 
         self._only_accept_improvements = only_accept_improvements
@@ -95,6 +100,7 @@ class CooperativeDecompositionSolver(Solver):
         num_groups: int,
         evaluate_starting_population: bool = True,
     ) -> List[Solver]:
+        """Creates one sub-solver for each group"""
         solvers = []
         base_name = sub_solver_params.get("name", self.name)
         for k in range(num_groups):
@@ -123,11 +129,17 @@ class CooperativeDecompositionSolver(Solver):
         return (full_vector, evaluation)
 
     def step(self) -> None:
+        """Performs one iteration
+
+        After each sub-solver's step its best partial solution gets written into
+        the context so the next sub-solver already works with it.
+        """
         self._iteration += 1
 
         assembled_evaluation = self._counting_problem.evaluate(self._context.get_full_vector())
 
         for k, sub_solver in enumerate(self._sub_solvers):
+            # The context may have changed since this sub-solver last step
             sub_solver.refresh_evaluations()
 
             # The sub-solver's best is never worse than its part of the context
@@ -306,6 +318,7 @@ class CooperativeDecompositionSolver(Solver):
         self._last_regroup_iteration = self._iteration
 
     def _give_new_velocities(self) -> None:
+        """Gives every particle a new random velocity"""
 
         for sub_solver in self._sub_solvers:
 
@@ -323,6 +336,7 @@ class CooperativeDecompositionSolver(Solver):
                     velocity[d] = random.uniform(-span_size, span_size)
 
     def _give_new_positions(self) -> None:
+        """Gives new random positions to GA and DE individuals"""
 
         for sub_solver in self._sub_solvers:
 
@@ -337,6 +351,7 @@ class CooperativeDecompositionSolver(Solver):
                     individual[d] = random.uniform(lower_bounds[d], upper_bounds[d])
 
     def get_population(self) -> List[List[float]]:
+        """Returns every sub-solver's individuals as full-dimension vectors"""
         expanded = []
 
         for k, sub_solver in enumerate(self._sub_solvers):
@@ -350,6 +365,7 @@ class CooperativeDecompositionSolver(Solver):
         return expanded
 
     def get_population_evaluations(self) -> List[Evaluation]:
+        """Evaluates the full-dimension population on the original problem."""
 
         evaluations = []
         for individual in self.get_population():
@@ -358,4 +374,5 @@ class CooperativeDecompositionSolver(Solver):
         return evaluations
 
     def get_result(self) -> List[Tuple[List[float], Evaluation]]:
+        """Returns the context vector and its evaluation as the best solution."""
         return [self._get_global_best()]

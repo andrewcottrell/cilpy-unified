@@ -65,15 +65,11 @@ class StaticEvenGrouping(GroupingStrategy):
     Indices are assigned left-to-right in order. The last group takes any
     remainder so that all indices are covered even when ``dimension`` is not
     evenly divisible by ``num_groups``.
-
-    Example:
-        >>> g = StaticEvenGrouping()
-        >>> g.group(10, 3)
-        [[0, 1, 2], [3, 4, 5], [6, 7, 8, 9]]
     """
 
     def group(self, dimension: int, num_groups: int, **kwargs) -> List[List[int]]:
-        
+        """Splits dimensions in order into num_groups groups."""
+
         base = dimension // num_groups
         remainder = dimension % num_groups
         groups: List[List[int]] = []
@@ -102,6 +98,7 @@ class RandomGrouping(GroupingStrategy):
         [[4, 0, 2], [5, 1, 3]]
     """
     def group(self, dimension: int, num_groups: int, **kwargs) -> List[List[int]]:
+        """Shuffles the dimensions and splits them into num_groups groups."""
 
         return shuffled_partition(dimension, num_groups)
 
@@ -179,7 +176,6 @@ def cut_into_parts(indices: List[int], number_of_parts: int) -> List[List[int]]:
 
     return parts
 
-
 class GroupSplitter(ABC):
     """Abstract base class for splitting groups"""
 
@@ -222,6 +218,15 @@ class GroupSplitter(ABC):
         return new_groups
 
     def _select_groups_to_split(self, groups: List[List[int]], state: Optional[dict]) -> List[int]:
+        """
+        Chooses which groups are split.
+        Args:
+            groups: The groups of dimension indices.
+            state: Optional coordinator state.
+
+        Returns:
+            The indices of the groups to split.
+        """
 
         selected = []
 
@@ -249,6 +254,7 @@ class EvenSplitter(GroupSplitter):
     """A type of GroupSplitter that splits each group into equal parts."""
 
     def _split_group(self, group: List[int], state: Optional[dict]) -> List[List[int]]:
+        """Cuts group in order into split_factor parts."""
 
         number_of_parts = min(self.split_factor, len(group))
 
@@ -258,6 +264,7 @@ class RandomSplitter(GroupSplitter):
     """A GroupSplitter that shuffles each group and then splits it into equal parts."""
 
     def _split_group(self, group: List[int], state: Optional[dict]) -> List[List[int]]:
+        """Shuffles the group and cuts it into split_factor parts."""
 
         shuffled_group = list(group)
         random.shuffle(shuffled_group)
@@ -270,6 +277,9 @@ class GroupMerger(ABC):
     """Abstract base class for merging groups"""
 
     def __init__(self, merge_factor: int = 2) -> None:
+        """
+        Initializes the GroupMerger.
+        """
 
         if merge_factor < 2:
             raise ValueError(f"merge_factor must be at least 2 but got {merge_factor}")
@@ -316,6 +326,7 @@ class EvenMerger(GroupMerger):
     """A GroupMerger that merges every merge_factor groups next to each other"""
 
     def _select_groups_to_merge(self, groups: List[List[int]], state: Optional[dict]) -> List[List[int]]:
+        """Puts every merge_factor neighbouring groups into one block."""
 
         blocks = []
 
@@ -327,8 +338,10 @@ class EvenMerger(GroupMerger):
         return blocks
 
 class RandomMerger(GroupMerger):
+    """A GroupMerger that merges randomly chosen groups"""
 
     def _select_groups_to_merge(self, groups: List[List[int]], state: Optional[dict]) -> List[List[int]]:
+        """Shuffles the groups and puts every merge_factor of them in one block."""
 
         group_indices = list(range(len(groups)))
         random.shuffle(group_indices)

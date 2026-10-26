@@ -62,6 +62,7 @@ class FixedIntervalTrigger(RegroupTrigger):
         self._interval = interval
 
     def should_trigger(self, state: dict) -> bool:
+        """Returns True when a trigger should fire."""
 
         iteration = state["iteration"]
 
@@ -75,6 +76,7 @@ class EvaluationIntervalTrigger(RegroupTrigger):
     """Triggers every fixed amount of fitness evaluations."""
 
     def __init__(self, interval: int) -> None:
+        """Initializes the EvaluationIntervalTrigger."""
 
         if interval < 1:
             raise ValueError(f"interval must be at least 1, but got {interval}")
@@ -84,15 +86,18 @@ class EvaluationIntervalTrigger(RegroupTrigger):
 
 
     def should_trigger(self, state: dict) -> bool:
+        """Returns True once the evaluations used reach the next threshold."""
 
         return state["evaluations"] >= self._next_threshold
 
     def on_triggered(self, state: dict) -> None:
+        """Moves the threshold one interval further."""
 
 
         self._next_threshold += self._interval
 
     def reset(self) -> None:
+        """Sets the threshold back to the first interval."""
         self._next_threshold = self._interval
 
 
@@ -151,6 +156,7 @@ class StagnationTrigger(RegroupTrigger):
 
 
     def should_trigger(self, state: dict) -> bool:
+        """Returns True after patience iterations in a row without a meaningful improvement."""
 
         current_best_fitness = state["best_fitness"]
 
@@ -178,6 +184,7 @@ class StagnationTrigger(RegroupTrigger):
         self._iterations_without_improvement = 0
 
     def reset(self) -> None:
+        """Forgets the best fitness and the patience count of the previous run."""
         self._best_fitness_so_far = None
         self._iterations_without_improvement = 0
 
@@ -186,6 +193,7 @@ class NeverTrigger(RegroupTrigger):
     """This never triggers. Used by solvers with a static grouping."""
 
     def should_trigger(self, state: dict) -> bool:
+        """Always returns False."""
         return False
 
 

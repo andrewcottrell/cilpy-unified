@@ -2,7 +2,6 @@
 **/.mypy_cache
 **/.pytest_cache
 **/*.jpeg
-**/*.out.*
 **/*.tmp.*
 cilpy.egg-info
 clean_pc.sh
@@ -11,3 +10,12 @@ tmp.*
 build/
 dist/
 site/
+
+out/
+*.log
+
+# Local environments and OS files
+.venv/
+venv/
+nohup.out
+.DS_Store

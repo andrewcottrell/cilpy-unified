@@ -14,11 +14,12 @@ build-backend = "setuptools.build_meta"
 name = "cilpy"
 version = "0.0.2"
 authors = [
-  { name="Willie Loftie-Eaton", email="willieloea@gmail.com" }
+  { name="Willie Loftie-Eaton", email="willieloea@gmail.com" },
+  { name="Andrew Cottrell" }
 ]
 description = "A computational intelligence library for Python."
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE*"]
 
@@ -34,5 +35,5 @@ Homepage = "https://github.com/willieloea/cilpy"
 Issues = "https://github.com/willieloea/cilpy/issues"
 Repository = "https://github.com/willieloea/cilpy"
 
-[tool.setuptools]
-packages = ["cilpy"]
+[tool.setuptools.packages.find]
+include = ["cilpy*"]

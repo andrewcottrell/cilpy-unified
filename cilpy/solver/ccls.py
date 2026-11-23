@@ -1,50 +1,19 @@
 # cilpy/solver/ccls.py
-"""A co-evolutionary framework for constrained optimization problems.
+"""Competitive co-evolutionary Lagrangian solver (CCLS).
 
-This module provides the `CoevolutionaryLagrangianSolver`, a meta-solver that
-tackles constrained optimization problems by reformulating them using Lagrangian
-relaxation. This approach avoids traditional penalty functions by transforming
-the problem into an unconstrained min-max optimization task, which is then
-solved by two cooperating populations of solvers.
-
-How the Cooperative Co-evolutionary Framework Works:
------------------------------------------------------
-A constrained optimization problem can be stated as:
-  Minimize: f(x)
-  Subject to: g_i(x) <= 0  (inequality constraints)
-              h_j(x) == 0  (equality constraints)
-
-The Lagrangian function combines the objective and constraints into a single
-equation:
-  L(x, mu, lambda) = f(x) + Sum(mu_i * g_i(x)) + Sum(lambda_j * h_j(x))
-
-Here, mu and lambda are the Lagrangian multipliers. The solution to the
-original problem can be found by solving the min-max problem:
-  min_x max_{mu,lambda} L(x, mu, lambda)
-
-This framework implements this min-max search using two populations:
-1.  An 'Objective Solver' Population: This population searches the original
-    problem's solution space (for 'x'). Its goal is to MINIMIZE the Lagrangian
-    function, L(x, mu*, lambda*), where the multipliers (mu*, lambda*) are the
-    best ones found so far by the other population.
-2.  A 'Multiplier Solver' Population: This population searches the space of
-    Lagrangian multipliers (for 'mu' and 'lambda'). Its goal is to MAXIMIZE the
-    Lagrangian function, L(x*, mu, lambda), where the solution (x*) is the best
-    one found so far by the objective population.
-
-At each step, the best individual from each population is used to define the
-fitness landscape for the other. This cooperative process simultaneously drives
-the solution 'x' towards feasibility and optimality while evolving the
-multipliers to appropriately penalize constraint violations.
-
-This implementation acts as a high-level "coordinator" or "meta-solver". It is
-configured with two standard solver instances from the library (e.g., two GAs,
-two PSOs for CCPSO) which manage the search process for their respective
-populations.
+Solves min_x max_(mu, lambda) L(x, mu, lambda) with two solvers: an objective
+solver searches x on the penalised problem, and a multiplier solver searches
+the Lagrange multipliers. On a multi-objective problem each objective has its
+own multiplier solver, scored with the sampled dual function (CCMGPSO when
+the objective solver is MGPSO).
 """
 
 import math
 from typing import List, Optional, Tuple, Type
+
+import random
+
+import numpy as np
 
 from cilpy.problem import Problem, Evaluation, SolutionType
 from cilpy.solver import Solver
@@ -54,6 +23,27 @@ from cilpy.solver.chm import ConstraintHandler
 #: must be finite so that population initialization via random.uniform produces
 #: usable values; see `_LagrangianMaxProblem.__init__`.
 DEFAULT_MULTIPLIER_MAX = 1e4
+
+
+def _position_key(solution) -> tuple:
+    """Hashable key of a position, for the evaluation cache."""
+    return tuple(float(v) for v in solution)
+
+
+def _total_violation(evaluation: Evaluation, tolerance: float = 1e-6) -> float:
+    """Total constraint violation of an evaluation.
+
+    Sum of positive inequality violations and absolute equality violations
+    beyond tolerance. Zero if and only if the solution is feasible.
+    """
+    violation = 0.0
+    for g in evaluation.constraints_inequality or []:
+        if g > 0:
+            violation += g
+    for h in evaluation.constraints_equality or []:
+        if abs(h) > tolerance:
+            violation += abs(h)
+    return violation
 
 
 class _LagrangianMinProblem(Problem):
@@ -73,12 +63,16 @@ class _LagrangianMinProblem(Problem):
             (lambda*) from the multiplier swarm, fixed for this evaluation.
     """
 
-    def __init__(self, original_problem: Problem):
+    def __init__(self, original_problem: Problem, penalty_rho: float = 0.1, penalty_rho_equality: float = None):
         """Initializes the proxy problem for the objective space.
 
         Args:
             original_problem: The original constrained problem instance that
                 will be wrapped.
+            penalty_rho: Fixed penalty coefficient on inequality violations.
+                Defaults to 0.1.
+            penalty_rho_equality: Penalty coefficient for equality constraints.
+                Defaults to penalty_rho if not specified.
         """
         super().__init__(
             original_problem.dimension,
@@ -86,18 +80,34 @@ class _LagrangianMinProblem(Problem):
             "LagrangianMinProblem"
         )
         self.original_problem = original_problem
-        self.fixed_multipliers_inequality = [0.0] * len(
-            self.original_problem.evaluate(
-                self.original_problem.bounds[0]
-            ).constraints_inequality
-            or []
-        )
-        self.fixed_multipliers_equality = [0.0] * len(
-            self.original_problem.evaluate(
-                self.original_problem.bounds[0]
-            ).constraints_equality
-            or []
-        )
+
+        # Evaluate at lower bounds to initialize multipliers based on constraint violations
+        initial_point = [original_problem.bounds[0][i] for i in range(original_problem.dimension)]
+        initial_eval = original_problem.evaluate(initial_point)
+
+        # Initialize inequality multipliers based on initial violations
+        ineq_constraints = initial_eval.constraints_inequality or []
+        self.fixed_multipliers_inequality = [
+            max(0.0, min(g, 1.0)) for g in ineq_constraints
+        ]
+
+        # Initialize equality multipliers based on initial violations
+        eq_constraints = initial_eval.constraints_equality or []
+        self.fixed_multipliers_equality = [
+            min(abs(h), 1.0) for h in eq_constraints
+        ]
+
+        self.penalty_rho = penalty_rho
+        self.penalty_rho_equality = penalty_rho_equality if penalty_rho_equality is not None else penalty_rho
+
+        # One (mu, lambda) pair per objective. None until the first step; every
+        # objective then uses the initial multipliers above.
+        self.objective_multipliers = None
+
+        # Original-problem evaluations by position (reuse_evaluations).
+        self.reuse_evaluations = False
+        self._cache = {}
+
 
     def set_fixed_multipliers(self, inequality_multipliers, equality_multipliers):
         """Updates the fixed Lagrangian multipliers for the next generation.
@@ -112,6 +122,26 @@ class _LagrangianMinProblem(Problem):
         self.fixed_multipliers_inequality = inequality_multipliers
         self.fixed_multipliers_equality = equality_multipliers
 
+    def set_objective_multipliers(self, multipliers):
+        """Sets one multiplier vector per objective (per-objective mode).
+
+        Args:
+            multipliers (List[Tuple[List[float], List[float]]]): For each
+                objective m, the pair (mu_m*, lambda_m*). Objective m is then
+                penalised with its own multipliers only.
+        """
+        self.objective_multipliers = multipliers
+
+    def _penalty(self, gx, hx, mu, la) -> float:
+        """Clamped penalty for one multiplier vector, plus the fixed rho terms."""
+        penalty = sum(m * max(0.0, g) for m, g in zip(mu, gx))
+        penalty += sum(l * abs(h) for l, h in zip(la, hx))
+        if self.penalty_rho > 0.0 and gx:
+            penalty += self.penalty_rho * sum(max(0.0, g) for g in gx)
+        if self.penalty_rho_equality > 0.0 and hx:
+            penalty += self.penalty_rho_equality * sum(abs(h) for h in hx)
+        return penalty
+
     def evaluate(self, solution: list[float]) -> Evaluation:
         """Calculates the Lagrangian value L(x, mu*, lambda*).
 
@@ -123,36 +153,89 @@ class _LagrangianMinProblem(Problem):
 
         Returns:
             Evaluation[float]: An Evaluation object where `fitness` is the
-                Lagrangian value. The constraint fields are empty.
+                Lagrangian value. Constraint values are copied from the
+                original problem.
         """
         # Evaluate the original problem to get f(x), g(x), and h(x)
         original_eval = self.original_problem.evaluate(solution)
+        if self.reuse_evaluations:
+            self._cache[_position_key(solution)] = original_eval
+        return self._lagrangian(original_eval)
+
+    def original_evaluation(self, solution: list[float]) -> Evaluation:
+        """Evaluation of `solution` on the original problem, taken from the
+        cache when the position has been evaluated since the last detected
+        environment change."""
+        if self.reuse_evaluations:
+            cached = self._cache.get(_position_key(solution))
+            if cached is not None:
+                return cached
+            self.evaluate(solution)
+            return self._cache[_position_key(solution)]
+        return self.original_problem.evaluate(solution)
+
+    def evaluate_cached(self, solution: list[float]) -> Evaluation:
+        """As `evaluate`, but reuses the cached evaluation of the original
+        problem. Used to re-score solutions when only the multipliers change."""
+        return self._lagrangian(self.original_evaluation(solution))
+
+    def clear_cache(self) -> None:
+        """Discards every cached evaluation (after an environment change)."""
+        self._cache = {}
+
+    def prune_cache(self, positions) -> None:
+        """Keeps only the cached evaluations of the given positions."""
+        keep = {_position_key(x) for x in positions}
+        self._cache = {k: v for k, v in self._cache.items() if k in keep}
+
+    def _lagrangian(self, original_eval: Evaluation) -> Evaluation:
+        """L(x, mu*, lambda*) from an evaluation of the original problem."""
         fx = original_eval.fitness
         gx = original_eval.constraints_inequality or []
         hx = original_eval.constraints_equality or []
 
-        # Calculate L(x, mu*, lambda*)
-        lagrangian_value = fx
-        lagrangian_value += sum(
-            mu * g for mu, g in zip(self.fixed_multipliers_inequality, gx)
-        )
-        lagrangian_value += sum(
-            la * h for la, h in zip(self.fixed_multipliers_equality, hx)
-        )
+        if isinstance(fx, (list, tuple)):
+            multipliers = self.objective_multipliers or [
+                (self.fixed_multipliers_inequality, self.fixed_multipliers_equality)
+            ] * len(fx)
+            lagrangian_value = [
+                fm + self._penalty(gx, hx, mu, la)
+                for fm, (mu, la) in zip(fx, multipliers)
+            ]
+        else:
+            # Single-objective
+            lagrangian_value = fx
+            lagrangian_value += sum(
+                mu * g for mu, g in zip(self.fixed_multipliers_inequality, gx)
+            )
+            lagrangian_value += sum(
+                la * h for la, h in zip(self.fixed_multipliers_equality, hx)
+            )
+            if self.penalty_rho > 0.0 and gx:
+                lagrangian_value += self.penalty_rho * sum(
+                    max(0.0, g) for g in gx
+                )
+            if self.penalty_rho_equality > 0.0 and hx:
+                lagrangian_value += self.penalty_rho_equality * sum(
+                    abs(h) for h in hx
+                )
 
-        # This problem is now unconstrained from the solver's perspective
-        return Evaluation(fitness=lagrangian_value)
+        return Evaluation(
+            fitness=lagrangian_value,
+            constraints_inequality=original_eval.constraints_inequality,
+            constraints_equality=original_eval.constraints_equality,
+        )
 
     def get_fitness_bounds(self) -> Tuple[float, float]:
         """Delegates to the original problem to satisfy the interface."""
         return self.original_problem.get_fitness_bounds()
 
     def is_dynamic(self) -> tuple[bool, bool]:
-        """Delegates the check for dynamic properties to the original problem.
+        """Delegates to the original problem. Multiplier changes are not
+        reported here; the solver calls `MGPSO.rescore` for them.
 
         Returns:
-            Tuple[bool, bool]: A tuple indicating if the original problem's
-                objectives or constraints are dynamic.
+            Tuple[bool, bool]: (objectives_dynamic, constraints_dynamic).
         """
         return self.original_problem.is_dynamic()
 
@@ -262,12 +345,15 @@ class _LagrangianMaxProblem(Problem):
         gx = self.fixed_solution_eval.constraints_inequality or []
         hx = self.fixed_solution_eval.constraints_equality or []
 
+        if isinstance(fx, (list, tuple)):
+            fx = 0.0
+
         # Calculate L(x*, mu, lambda)
         lagrangian_value = fx
         lagrangian_value += sum(s*g for s, g in zip(inequality_multipliers, gx))
         lagrangian_value += sum(l*h for l, h in zip(equality_multipliers, hx))
 
-        # Return the negative value because we want to MAXIMIZE L
+        # Return the negative value
         return Evaluation(fitness=-lagrangian_value)
 
     def get_fitness_bounds(self) -> Tuple[float, float]:
@@ -293,12 +379,72 @@ class _LagrangianMaxProblem(Problem):
         return self.original_problem.is_multi_objective()
 
 
+class _DualMultiplierProblem(Problem):
+    """Proxy problem for the multiplier swarm of one objective (per-objective mode).
+
+    The fitness of (mu_m, lambda_m) is the sampled dual function
+
+        q_m(mu, lambda) = min_{x in R_m} f_m(x) + mu^T g(x) + lambda^T h(x)
+
+    over a reference set R_m from the objective solver. Returns -q_m.
+    """
+
+    def __init__(
+        self,
+        original_problem: Problem,
+        objective_idx: int,
+        num_inequality: int,
+        num_equality: int,
+        multiplier_max: float,
+    ):
+        lower_bounds = [0.0] * num_inequality + [-multiplier_max] * num_equality
+        upper_bounds = [multiplier_max] * (num_inequality + num_equality)
+        super().__init__(
+            num_inequality + num_equality,
+            (lower_bounds, upper_bounds),
+            f"DualMultiplierProblem_{objective_idx}",
+        )
+        self.original_problem = original_problem
+        self.objective_idx = objective_idx
+        self.num_inequality = num_inequality
+        self._f = np.zeros(0)
+        self._g = np.zeros((0, num_inequality))
+        self._h = np.zeros((0, num_equality))
+
+    def set_reference(self, evaluations: List[Evaluation]) -> None:
+        """Sets the reference set R_m from evaluations on the original problem."""
+        self._f = np.array([e.fitness[self.objective_idx] for e in evaluations])
+        self._g = np.array(
+            [e.constraints_inequality or [] for e in evaluations], dtype=float
+        ).reshape(len(evaluations), self.num_inequality)
+        self._h = np.array(
+            [e.constraints_equality or [] for e in evaluations], dtype=float
+        ).reshape(len(evaluations), self.dimension - self.num_inequality)
+
+    def evaluate(self, solution: list[float]) -> Evaluation:
+        if len(self._f) == 0:
+            return Evaluation(fitness=0.0)
+        mu = np.asarray(solution[: self.num_inequality], dtype=float)
+        la = np.asarray(solution[self.num_inequality :], dtype=float)
+        values = self._f + self._g @ mu + self._h @ la
+        return Evaluation(fitness=-float(values.min()))
+
+    def get_fitness_bounds(self) -> Tuple[float, float]:
+        return self.original_problem.get_fitness_bounds()
+
+    def is_dynamic(self) -> tuple[bool, bool]:
+        return (True, False)
+
+    def is_multi_objective(self) -> bool:
+        return False
+
+
 class CoevolutionaryLagrangianSolver(Solver):
     """A meta-solver for constrained optimization using a co-evolutionary
     Lagrangian framework.
 
     This solver transforms a constrained problem into an unconstrained min-max
-    problem, which it solves using two cooperating ("co-evolving") populations
+    problem, which it solves using two competing ("co-evolving") populations
     of standard solvers. It is generic and can be configured with any two
     solver classes from the `cilpy` library.
 
@@ -306,7 +452,10 @@ class CoevolutionaryLagrangianSolver(Solver):
         objective_solver (Solver): The subordinate solver instance that searches
             the solution space of the original problem.
         multiplier_solver (Solver): The subordinate solver instance that
-            searches the space of the Lagrangian multipliers.
+            searches the space of the Lagrangian multipliers (single-objective
+            problems).
+        multiplier_solvers (List[Solver]): One multiplier solver per objective
+            (multi-objective problems).
         min_problem (_LagrangianMinProblem): The internal proxy problem for the
             objective solver.
         max_problem (_LagrangianMaxProblem): The internal proxy problem for the
@@ -338,12 +487,26 @@ class CoevolutionaryLagrangianSolver(Solver):
                 the objective solver.
             multiplier_solver_params: A dictionary of parameters to initialize
                 the multiplier solver.
-            constraint_handler: An optional strategy for comparing constrained
-                solutions, applied when re-evaluating results against the
-                original problem. The sub-solvers operate on unconstrained
-                proxy problems and so use their own comparators.
+            penalty_rho: Fixed penalty coefficient on inequality violations.
+                Defaults to 0.
+            penalty_rho_equality: Fixed penalty coefficient on equality
+                violations. Defaults to penalty_rho.
             multiplier_max: The finite magnitude bound on the multiplier search
                 space. Defaults to `DEFAULT_MULTIPLIER_MAX`.
+            constraint_handler: Comparator passed to the objective solver.
+            archive_strategy: "filter" (default) returns the feasible archive
+                members, or the whole archive if none is feasible; "strict"
+                admits only feasible solutions to the archive.
+            reuse_evaluations: If True, original-problem evaluations are
+                cached by position and reused when only the multipliers
+                change. Defaults to False.
+            multiplier_mode: "per_objective" (default): one multiplier solver
+                per objective on a multi-objective problem, scored with the
+                sampled dual. Ignored on single-objective problems.
+            multiplier_immigrants: Share of each per-objective multiplier
+                swarm moved to random positions every iteration. Defaults to 0.
+            multiplier_steps: Steps of each per-objective multiplier swarm per
+                iteration. Defaults to 1.
         """
 
         super().__init__(problem, name=name, constraint_handler=constraint_handler)
@@ -351,19 +514,146 @@ class CoevolutionaryLagrangianSolver(Solver):
         # 1. Create the proxy problems
         # We need an initial solution to dimension the multiplier problem
         initial_solution = [problem.bounds[0][i] for i in range(problem.dimension)]
+        penalty_rho = float(kwargs.get("penalty_rho", 0.0))
+        penalty_rho_equality = float(kwargs.get("penalty_rho_equality", penalty_rho))
         self.multiplier_max = multiplier_max
-        self.min_problem = _LagrangianMinProblem(problem)
+
+        self.archive_strategy = str(kwargs.get("archive_strategy", "filter"))
+        if self.archive_strategy not in ("filter", "strict"):
+            raise ValueError(
+                f"archive_strategy must be 'filter' or 'strict', "
+                f"got '{self.archive_strategy}'."
+            )
+
+        self.min_problem = _LagrangianMinProblem(
+            problem,
+            penalty_rho=penalty_rho,
+            penalty_rho_equality=penalty_rho_equality,
+        )
+        self.min_problem.reuse_evaluations = bool(
+            kwargs.get("reuse_evaluations", False)
+        )
         self.max_problem = _LagrangianMaxProblem(
             problem, initial_solution, multiplier_max=multiplier_max
         )
 
-        # 2. Instantiate the internal solvers
+        obj_params = dict(objective_solver_params)
+        obj_params.setdefault("name", f"{name}_objective")
+        if problem.is_multi_objective() and self.archive_strategy == "strict":
+            obj_params.setdefault("feasible_archive_only", True)
         self.objective_solver = objective_solver_class(
-            problem=self.min_problem, **objective_solver_params
+            problem=self.min_problem,
+            constraint_handler=constraint_handler,
+            **obj_params
         )
+        mul_params = dict(multiplier_solver_params)
+        mul_params.setdefault("name", f"{name}_multiplier")
         self.multiplier_solver = multiplier_solver_class(
-            problem=self.max_problem, **multiplier_solver_params
+            problem=self.max_problem, **mul_params
         )
+
+        self.multiplier_mode = str(kwargs.get("multiplier_mode", "per_objective"))
+        if self.multiplier_mode != "per_objective":
+            raise ValueError(
+                f"multiplier_mode must be 'per_objective', "
+                f"got '{self.multiplier_mode}'."
+            )
+        self.multiplier_solvers = []
+        self.dual_problems = []
+        self._prev_objective_multipliers = None
+        self.multiplier_immigrants = float(kwargs.get("multiplier_immigrants", 0.0))
+        self.multiplier_steps = int(kwargs.get("multiplier_steps", 1))
+        if problem.is_multi_objective():
+            n_objectives = len(problem.evaluate(initial_solution).fitness)
+            for m in range(n_objectives):
+                dual = _DualMultiplierProblem(
+                    problem, m,
+                    self.max_problem.num_inequality,
+                    self.max_problem.dimension - self.max_problem.num_inequality,
+                    multiplier_max,
+                )
+                params = dict(multiplier_solver_params)
+                params["name"] = f"{name}_multiplier_{m}"
+                self.dual_problems.append(dual)
+                self.multiplier_solvers.append(
+                    multiplier_solver_class(problem=dual, **params)
+                )
+
+    def _reference_evaluations(self, objective_idx: int) -> List[Evaluation]:
+        """Evaluations on the original problem of the reference set R_m.
+
+        R_m holds the personal best positions of sub-swarm m (the current
+        position where no personal best exists yet) and every archive member.
+        With `reuse_evaluations` these are read from the cache.
+        """
+        swarm = self.objective_solver._swarms[objective_idx]
+        positions = [
+            list(p.y) if p.y_eval is not None else list(p.x)
+            for p in swarm.particles
+        ]
+        positions += [s for s, _ in self.objective_solver.get_result()]
+        return [self.min_problem.original_evaluation(x) for x in positions]
+
+    def _add_immigrants(self, solver, dual) -> None:
+        """Moves a random share of the multiplier swarm to random positions;
+        personal bests are kept. Magnitudes are sampled log-uniformly from
+        1e-3 to the bound.
+        """
+        upper = dual.bounds[1]
+        n = int(round(self.multiplier_immigrants * solver.swarm_size))
+        for i in random.sample(range(solver.swarm_size), n):
+            position = [
+                10 ** random.uniform(-3.0, np.log10(upper[d]))
+                for d in range(dual.dimension)
+            ]
+            for d in range(dual.num_inequality, dual.dimension):
+                position[d] *= random.choice((-1.0, 1.0))
+            solver.population[i] = position
+
+    def _step_per_objective(self) -> None:
+        """One co-evolutionary step with one multiplier solver per objective."""
+        # Detect an environment change before the new multipliers change the
+        # penalised landscape.
+        self.objective_solver.check_environment()
+
+        multipliers = []
+        for m, (dual, solver) in enumerate(
+            zip(self.dual_problems, self.multiplier_solvers)
+        ):
+            dual.set_reference(self._reference_evaluations(m))
+            # The dual landscape changed with the new reference set.
+            solver.respond_to_change()
+            if self.multiplier_immigrants > 0.0:
+                self._add_immigrants(solver, dual)
+            best, _ = solver.get_result()[0]
+            k = dual.num_inequality
+            multipliers.append((list(best[:k]), list(best[k:])))
+
+        self.min_problem.set_objective_multipliers(multipliers)
+        if multipliers != self._prev_objective_multipliers:
+            self.objective_solver.rescore()
+        self._prev_objective_multipliers = multipliers
+
+        self.objective_solver.step()
+        for solver in self.multiplier_solvers:
+            for _ in range(self.multiplier_steps):
+                solver.step()
+        self._prune_cache()
+
+    def _prune_cache(self) -> None:
+        """Keeps only the cached evaluations of the current positions,
+        personal bests, archive members and sentry."""
+        if not self.min_problem.reuse_evaluations:
+            return
+        positions = [s for s, _ in self.objective_solver.get_result()]
+        for swarm in getattr(self.objective_solver, "_swarms", []):
+            for p in swarm.particles:
+                positions.append(p.x)
+                positions.append(p.y)
+        sentry = getattr(self.objective_solver, "_sentry_x", None)
+        if sentry is not None:
+            positions.append(sentry)
+        self.min_problem.prune_cache(positions)
 
     def step(self) -> None:
         """Performs one co-evolutionary step.
@@ -374,8 +664,13 @@ class CoevolutionaryLagrangianSolver(Solver):
            individual from the other population.
         3. Advancing each subordinate solver by one iteration.
         """
+        if self.problem.is_multi_objective():
+            self._step_per_objective()
+            return
 
-        # 1. Get the best individuals from each population
+        if hasattr(self.objective_solver, "check_environment"):
+            self.objective_solver.check_environment()
+
         best_solution, _ = self.objective_solver.get_result()[0]
         best_multipliers, _ = self.multiplier_solver.get_result()[0]
 
@@ -383,37 +678,41 @@ class CoevolutionaryLagrangianSolver(Solver):
         inequality_multipliers = best_multipliers[:num_inequality]
         equality_multipliers = best_multipliers[num_inequality:]
 
-        # 2. Update the fitness landscapes for the sub-solvers
-        # The 'min' problem gets the best multipliers from the 'max' solver
         self.min_problem.set_fixed_multipliers(
             inequality_multipliers, equality_multipliers
         )
-        # The 'max' problem gets the best solution from the 'min' solver
+
         self.max_problem.set_fixed_solution(best_solution)
 
-        # 3. Perform one step of each sub-solver
+        self.multiplier_solver.respond_to_change()
+
         self.objective_solver.step()
         self.multiplier_solver.step()
-
-        # TODO: Handle dynamic changes
-        # is_obj_dyn, is_con_dyn = self.problem.is_dynamic()
-        # if is_obj_dyn or is_con_dyn:
-        #     pass
+        self._prune_cache()
 
     def get_result(self) -> list[tuple[list[float], Evaluation]]:
-        """Returns the best solution found in the objective space.
+        """Returns the best solution(s), evaluated on the original problem.
 
-        The returned solution is evaluated against the *original* constrained
-        problem, providing the user with the true fitness and constraint
-        violation information.
+        Single-objective: the objective solver's best solution.
+        Multi-objective: the feasible archive members, or the whole archive
+        if none is feasible.
 
         Returns:
-            List[Tuple[SolutionType, Evaluation[float]]]: A list containing a
-                single tuple of (best_solution, evaluation_on_original_problem).
+            List[Tuple[SolutionType, Evaluation]]: One tuple per solution.
         """
-        best_solution, _ = self.objective_solver.get_result()[0]
-        final_evaluation = self.problem.evaluate(best_solution)
-        return [(best_solution, final_evaluation)]
+        if not self.problem.is_multi_objective():
+            best_solution, _ = self.objective_solver.get_result()[0]
+            final_evaluation = self.min_problem.original_evaluation(best_solution)
+            return [(best_solution, final_evaluation)]
+
+        re_evaluated = [
+            (solution, self.min_problem.original_evaluation(solution))
+            for solution, _ in self.objective_solver.get_result()
+        ]
+        feasible = [
+            (s, e) for s, e in re_evaluated if _total_violation(e) == 0.0
+        ]
+        return feasible if feasible else re_evaluated
 
     def get_population(self) -> List[List[float]]:
         """Delegates getting population to the objective solver."""

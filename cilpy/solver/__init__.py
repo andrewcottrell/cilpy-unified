@@ -117,6 +117,14 @@ class Solver(ABC, Generic[SolutionType, FitnessType]):
         """
         pass
 
+    def respond_to_change(self) -> None:
+        """Tells the solver that the fitness landscape has changed.
+
+        Solvers that keep past evaluations (personal bests, an archive)
+        override this to re-evaluate them. The default does nothing.
+        """
+        pass
+
     def get_population(self) -> List[SolutionType]:
         """
         Returns the entire current population or set of candidate solutions.

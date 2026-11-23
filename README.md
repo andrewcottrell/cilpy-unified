@@ -33,10 +33,10 @@ including:
   * Static and dynamic optimization problems
 
 ### Installing `cilpy`
-`cilpy` can be installed using pip:
+`cilpy` requires Python 3.11 or later. From the root of this repository:
 
 ```
-pip install cilpy
+pip install -e .
 ```
 
 ### Usage Example

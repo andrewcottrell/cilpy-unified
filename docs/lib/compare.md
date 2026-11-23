@@ -1,3 +1,6 @@
-The goal of this component is that it should allow users to conduct statistical
-tests to compare algorithms, much like this
-[tool](https://github.com/yesteryearer/Automated-Analysis-of-Metaheuristics).
+# Comparison Metrics
+
+`cilpy.compare.metrics`: IGD, GD, hypervolume, hypervolume ratio, spacing,
+spread, P_RED and the feasibility rate. All assume minimization.
+
+::: cilpy.compare.metrics

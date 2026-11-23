@@ -9,6 +9,31 @@ from cilpy.solver import Solver
 from cilpy.solver.chm import ConstraintHandler
 
 
+def _as_list(value) -> List[float]:
+    """Fitness or constraint values as a list of floats."""
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        return [float(v) for v in value]
+    return [float(value)]
+
+
+def _evaluations_differ(fresh: Evaluation, old: Evaluation, tolerance: float) -> bool:
+    """True if the fitness or any constraint value moved by more than
+    tolerance."""
+    for new_v, old_v in (
+        (fresh.fitness, old.fitness),
+        (fresh.constraints_inequality, old.constraints_inequality),
+        (fresh.constraints_equality, old.constraints_equality),
+    ):
+        new_l, old_l = _as_list(new_v), _as_list(old_v)
+        if len(new_l) != len(old_l):
+            return True
+        if any(abs(a - b) > tolerance for a, b in zip(new_l, old_l)):
+            return True
+    return False
+
+
 class PSO(Solver[List[float], float]):
     """
     A canonical Particle Swarm Optimization (PSO) solver.
@@ -26,6 +51,7 @@ class PSO(Solver[List[float], float]):
         c1: float,
         c2: float,
         constraint_handler: Optional[ConstraintHandler[float]] = None,
+        detect_changes: bool = False,
         **kwargs,
     ):
         """
@@ -43,6 +69,11 @@ class PSO(Solver[List[float], float]):
             constraint_handler: An optional strategy for comparing constrained
                solutions. Drives personal- and global-best updates via
                `self.comparator`. If None, a fitness-only comparator is used.
+            detect_changes: If True and the problem is dynamic, a sentry (the
+               global best position) is evaluated again at the start of every
+               iteration; when its objective or constraint values have moved,
+               the personal bests are re-evaluated (`respond_to_change`).
+               Defaults to False.
             **kwargs: Additional keyword arguments (not used in this canonical
                PSO).
         """
@@ -52,10 +83,22 @@ class PSO(Solver[List[float], float]):
         self.c1 = c1
         self.c2 = c2
 
+        # Change detection. The sentry is evaluated on the original problem
+        # when the PSO solves a CCLS proxy.
+        self._detect_changes = bool(detect_changes) and any(
+            self.problem.is_dynamic()
+        )
+        self._sentry_problem = getattr(self.problem, "original_problem", self.problem)
+        self._sentry_x: Optional[List[float]] = None
+        self._sentry_eval: Optional[Evaluation] = None
+        self._environment_checked = False
+        self.n_changes_detected = 0
+
         lower_bounds, upper_bounds = self.problem.bounds
 
         # Initialize swarm
         self.population = self._initialize_positions()
+        # Initial velocities: up to 25% of each variable's range.
         self.velocities = [
             [
                 (
@@ -63,7 +106,7 @@ class PSO(Solver[List[float], float]):
                         -abs(upper_bounds[i] - lower_bounds[i]),
                         abs(upper_bounds[i] - lower_bounds[i]),
                     )
-                    * 0.1
+                    * 0.25
                 )
                 for i in range(self.problem.dimension)
             ]
@@ -75,10 +118,13 @@ class PSO(Solver[List[float], float]):
         self.pbest_positions = copy.deepcopy(self.population)
         self.pbest_evaluations = copy.deepcopy(self.evaluations)
 
-        # Initialize global best
-        best_initial_idx = min(
-            range(self.swarm_size), key=lambda i: self.evaluations[i].fitness
-        )
+        # Initial global best, chosen with the comparator.
+        best_initial_idx = 0
+        for i in range(1, self.swarm_size):
+            if self.comparator.is_better(
+                self.evaluations[i], self.evaluations[best_initial_idx]
+            ):
+                best_initial_idx = i
         self.gbest_position = copy.deepcopy(self.population[best_initial_idx])
         self.gbest_evaluation = copy.deepcopy(self.evaluations[best_initial_idx])
 
@@ -94,8 +140,32 @@ class PSO(Solver[List[float], float]):
             positions.append(pos)
         return positions
 
+    def check_environment(self, tolerance: float = 1e-12) -> None:
+        """Detects an environment change with the sentry and responds to it,
+        at most once per iteration. Called by `step`, or earlier by
+        CoevolutionaryLagrangianSolver."""
+        if self._environment_checked or not self._detect_changes:
+            return
+        self._environment_checked = True
+
+        fresh = None
+        if self._sentry_x is not None:
+            fresh = self._sentry_problem.evaluate(list(self._sentry_x))
+            if _evaluations_differ(fresh, self._sentry_eval, tolerance):
+                self.n_changes_detected += 1
+                self.respond_to_change()
+
+        # The sentry follows the global best position.
+        if fresh is not None and self._sentry_x == self.gbest_position:
+            self._sentry_eval = fresh
+        else:
+            self._sentry_x = copy.deepcopy(self.gbest_position)
+            self._sentry_eval = self._sentry_problem.evaluate(list(self._sentry_x))
+
     def step(self) -> None:
         """Performs one iteration of the PSO algorithm."""
+        self.check_environment()
+        self._environment_checked = False
         lower_bounds, upper_bounds = self.problem.bounds
 
         for i in range(self.swarm_size):
@@ -140,6 +210,20 @@ class PSO(Solver[List[float], float]):
                 ):
                     self.gbest_position = copy.deepcopy(self.pbest_positions[i])
                     self.gbest_evaluation = copy.deepcopy(self.pbest_evaluations[i])
+
+    def respond_to_change(self) -> None:
+        """Re-evaluates the personal bests and recomputes the global best."""
+        self.pbest_evaluations = [
+            self.problem.evaluate(pos) for pos in self.pbest_positions
+        ]
+        best = 0
+        for i in range(1, len(self.pbest_positions)):
+            if self.comparator.is_better(
+                self.pbest_evaluations[i], self.pbest_evaluations[best]
+            ):
+                best = i
+        self.gbest_position = copy.deepcopy(self.pbest_positions[best])
+        self.gbest_evaluation = copy.deepcopy(self.pbest_evaluations[best])
 
     def get_result(self) -> List[Tuple[List[float], Evaluation[float]]]:
         """Returns the global best solution found by the swarm."""

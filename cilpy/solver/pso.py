@@ -35,6 +35,7 @@ class PSO(Solver[List[float], float]):
 
         Args:
             problem: The optimization problem to solve.
+            name: The name of the solver.
             swarm_size: The number of particles in the swarm.
             w: The inertia weight, controlling the influence of the previous
                velocity.
@@ -42,8 +43,17 @@ class PSO(Solver[List[float], float]):
                particle's personal best.
             c2: The social coefficient, scaling the influence of the swarm's
                global best.
+            max_velocity: Optional velocity limit as a fraction of each
+               dimension's range. None means no limit.
+            bound_handling: What happens when a particle leaves the bounds.
+               "clamp" puts it on the bound, "reflect" bounces it back and
+               "none" leaves it outside, where it cannot become a personal best.
             **kwargs: Additional keyword arguments (not used in this canonical
                PSO).
+
+        Raises:
+            ValueError: If bound_handling is not a known option or
+               max_velocity is not positive.
         """
         super().__init__(problem, name)
 
@@ -150,6 +160,15 @@ class PSO(Solver[List[float], float]):
                     self.gbest_evaluation = copy.deepcopy(self.pbest_evaluations[i])
 
     def _limit_velocity(self, velocity: float, d: int) -> float:
+        """Limits a velocity to max_velocity times the range of dimension d.
+
+        Args:
+            velocity: The new velocity.
+            d: The dimension of the velocity.
+
+        Returns:
+            The velocity, limited if max_velocity is set.
+        """
 
         if self.max_velocity is None:
             return velocity
@@ -160,6 +179,18 @@ class PSO(Solver[List[float], float]):
         return max(-limit, min(velocity, limit))
 
     def _handle_bounds(self, position: float, lower: float, upper: float) -> float:
+        """Applies the bound handling to one coordinate of a position.
+
+        A reflected position that is still outside is clamped.
+
+        Args:
+            position: The new coordinate.
+            lower: The lower bound of the dimension.
+            upper: The upper bound of the dimension.
+
+        Returns:
+            The coordinate after bound handling.
+        """
 
         if self.bound_handling == "none":
             return position
@@ -177,6 +208,7 @@ class PSO(Solver[List[float], float]):
         return max(lower, min(position, upper))
 
     def _is_inside_bounds(self, position: List[float]) -> bool:
+        """Returns True if every coordinate of the position is inside the bounds."""
         
         lower_bounds, upper_bounds = self.problem.bounds
 
@@ -190,6 +222,8 @@ class PSO(Solver[List[float], float]):
     def refresh_evaluations(self) -> None:
         """Re-evaluates stored personal-best fitness values under the
         current state of the problem.
+
+        The global best is then chosen again from the refreshed personal bests.
         """
         for i in range(self.swarm_size):
             self.pbest_evaluations[i] = self.problem.evaluate(self.pbest_positions[i])

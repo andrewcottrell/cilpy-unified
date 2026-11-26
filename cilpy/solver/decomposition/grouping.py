@@ -1,4 +1,9 @@
-"""Grouping strategies for cooperative decomposition solvers."""
+"""Groupings, group splitters and group mergers for cooperative solvers.
+
+A grouping builds a new set of groups from scratch. A splitter (used by
+DCPSO) and a merger (used by MCPSO) build the new groups from the
+current ones.
+"""
 
 import random
 from abc import ABC, abstractmethod
@@ -11,7 +16,7 @@ def shuffled_partition(dimension: int, number_of_groups: int) -> List[List[int]]
 
     Args:
         dimension: Total number of decision variables.
-        number_of_groups: How many groups we to split the shuffled indices into.
+        number_of_groups: How many groups to split the shuffled indices into.
 
     Returns:
         A list of `number_of_groups` lists of global dimension indices. The last
@@ -104,7 +109,10 @@ class RandomGrouping(GroupingStrategy):
 
 
 class RandomGroupSizeGrouping(GroupingStrategy):
-    """Random grouping where the group size it self is changed each time.
+    """Random grouping where the group size itself changes each time.
+
+    Every call picks a random group size from the given sizes, so the
+    number of groups can change at every regroup.
     """
 
     def __init__(self, group_sizes: List[int]) -> None:
@@ -136,6 +144,8 @@ class RandomGroupSizeGrouping(GroupingStrategy):
 
         Args:
             dimension: Total number of decision variables.
+            num_groups: Ignored, because the number of groups follows from
+                the chosen group size.
 
         Returns:
             A list of groups of dimension indices.
@@ -149,14 +159,17 @@ class RandomGroupSizeGrouping(GroupingStrategy):
 
 def cut_into_parts(indices: List[int], number_of_parts: int) -> List[List[int]]:
     """
-    This cuts a list of indices into the specified number of parts.
+    Cuts a list of indices in order into the given number of parts.
+
+    When the indices do not divide evenly, the first parts get one extra
+    index each, so 5 indices in 2 parts give sizes 3 and 2.
 
     Args:
-        indices: The indicies that must be cut
-        number_of_parts: the number of parts to split into
+        indices: The indices that must be cut.
+        number_of_parts: The number of parts to cut into.
 
     Returns:
-        The cut parts as a list of lists conatining the indices.
+        The cut parts as a list of lists containing the indices.
     """
 
     cut_size = len(indices)//number_of_parts
@@ -177,14 +190,21 @@ def cut_into_parts(indices: List[int], number_of_parts: int) -> List[List[int]]:
     return parts
 
 class GroupSplitter(ABC):
-    """Abstract base class for splitting groups"""
+    """Abstract base class for splitting groups.
+
+    Subclasses choose how one group is split by implementing _split_group,
+    and can override _select_groups_to_split to choose which groups split.
+    """
 
     def __init__(self, split_factor: int = 2) -> None:
         """
         Initializes the GroupSplitter.
 
         Args:
-            split_factor: Number of parts to split into.
+            split_factor: Number of parts to split each group into.
+
+        Raises:
+            ValueError: If split_factor is less than 2.
         """
 
         if split_factor < 2:
@@ -194,10 +214,13 @@ class GroupSplitter(ABC):
 
     def split(self, groups: List[List[int]], state: Optional[dict] = None) -> List[List[int]]:
         """
-        Splits only the selected groups.
+        Splits the selected groups and keeps the rest unchanged.
+
+        The parts of a group take the place of that group in the list.
 
         Args:
-            groups: the chosen groups of dimension indices.
+            groups: The current groups of dimension indices.
+            state: Optional coordinator state.
 
         Returns:
             The new list of groups.
@@ -219,7 +242,9 @@ class GroupSplitter(ABC):
 
     def _select_groups_to_split(self, groups: List[List[int]], state: Optional[dict]) -> List[int]:
         """
-        Chooses which groups are split.
+        Chooses which groups are split. By default every group with more
+        than one dimension.
+
         Args:
             groups: The groups of dimension indices.
             state: Optional coordinator state.
@@ -239,14 +264,14 @@ class GroupSplitter(ABC):
     @abstractmethod
     def _split_group(self, group: List[int], state: Optional[dict]) -> List[List[int]]:
         """
-        This method splits one group into smaller groups.
+        Splits one group into smaller groups.
 
         Args:
-            group: Dimension indices of the group
+            group: Dimension indices of the group.
             state: Optional coordinator state.
 
         Returns:
-            The parts of the group
+            The parts of the group.
         """
 
 
@@ -254,7 +279,7 @@ class EvenSplitter(GroupSplitter):
     """A type of GroupSplitter that splits each group into equal parts."""
 
     def _split_group(self, group: List[int], state: Optional[dict]) -> List[List[int]]:
-        """Cuts group in order into split_factor parts."""
+        """Cuts the group in order into split_factor parts."""
 
         number_of_parts = min(self.split_factor, len(group))
 
@@ -274,11 +299,21 @@ class RandomSplitter(GroupSplitter):
         return cut_into_parts(shuffled_group, number_of_parts)
 
 class GroupMerger(ABC):
-    """Abstract base class for merging groups"""
+    """Abstract base class for merging groups.
+
+    Subclasses choose which groups are merged together by implementing
+    _select_groups_to_merge.
+    """
 
     def __init__(self, merge_factor: int = 2) -> None:
         """
         Initializes the GroupMerger.
+
+        Args:
+            merge_factor: Number of groups merged into one.
+
+        Raises:
+            ValueError: If merge_factor is less than 2.
         """
 
         if merge_factor < 2:
@@ -288,10 +323,11 @@ class GroupMerger(ABC):
 
     def merge(self, groups: List[List[int]], state: Optional[dict] = None) -> List[List[int]]:
         """
-        Merges groups in each selected block into one group.
+        Merges the groups in each selected block into one group.
 
         Args:
-            groups: the groups of dimension indices.
+            groups: The current groups of dimension indices.
+            state: Optional coordinator state.
 
         Returns:
             The new list of groups.
@@ -317,13 +353,18 @@ class GroupMerger(ABC):
 
         Args:
             groups: The groups of dimension indices.
+            state: Optional coordinator state.
 
         Returns:
-            Blocks of group indices
+            Blocks of group indices. Every group appears in exactly one block.
         """
 
 class EvenMerger(GroupMerger):
-    """A GroupMerger that merges every merge_factor groups next to each other"""
+    """A GroupMerger that merges every merge_factor groups next to each other.
+
+    If the groups do not divide evenly, the last block holds the leftover
+    groups, so 5 groups give [1+2], [3+4], [5].
+    """
 
     def _select_groups_to_merge(self, groups: List[List[int]], state: Optional[dict]) -> List[List[int]]:
         """Puts every merge_factor neighbouring groups into one block."""
@@ -338,7 +379,11 @@ class EvenMerger(GroupMerger):
         return blocks
 
 class RandomMerger(GroupMerger):
-    """A GroupMerger that merges randomly chosen groups"""
+    """A GroupMerger that merges randomly chosen groups.
+
+    The group order is shuffled at every merge, then every merge_factor
+    groups are put in one block.
+    """
 
     def _select_groups_to_merge(self, groups: List[List[int]], state: Optional[dict]) -> List[List[int]]:
         """Shuffles the groups and puts every merge_factor of them in one block."""

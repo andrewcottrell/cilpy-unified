@@ -149,6 +149,7 @@ class Quadratic(Problem[List[float], float]):
         return False
 
     def get_fitness_bounds(self) -> Tuple[float, float]:
+        """Returns the known theoretical min and max fitness values."""
         best_fitness = 0.0
 
         lower_bound = self.bounds[0][0]
@@ -231,6 +232,7 @@ class Ackley(Problem[List[float], float]):
         return False
 
     def get_fitness_bounds(self) -> Tuple[float, float]:
+        """Returns the known theoretical min and max fitness values."""
 
         best_fitness = 0.0
         worst_fitness = self.a + math.e
@@ -462,6 +464,7 @@ class Griewank(Problem[List[float], float]):
         return False
 
     def get_fitness_bounds(self) -> Tuple[float, float]:
+        """Returns the known theoretical min and max fitness values."""
 
         best_fitness = 0.0
 

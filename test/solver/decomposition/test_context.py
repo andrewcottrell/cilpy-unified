@@ -6,9 +6,11 @@ Unit tests for ContextVector.
 from cilpy.solver.decomposition.context import ContextVector
 
 class TestUpdateGroup:
+    """Tests for writing a group's values into the context."""
 
     def test_values_land_at_the_correct_positions(self):
-        
+        """Updating group 0 writes its values at positions 0 and 1."""
+
         context = make_two_group_context()
 
         context.update_group(group_idx=0, sub_solution=[10.0, 20.0])
@@ -28,7 +30,7 @@ class TestUpdateGroup:
         assert full_vector[3] == 0.0
 
     def test_updating_second_group_writes_its_positions(self):
-        """Updating it should write to the correct positions."""
+        """Updating group 1 writes its values at positions 2 and 3."""
         context = make_two_group_context()
 
         context.update_group(group_idx=1, sub_solution=[7.0, 8.0])
@@ -49,6 +51,7 @@ class TestUpdateGroup:
         assert full_vector[1] == 9.0
 
     def test_updating_both_groups_assembles_the_full_vector(self):
+        """Updating both groups gives the complete vector in the right order."""
         context = make_two_group_context()
 
         context.update_group(group_idx=0, sub_solution=[1.0, 2.0])
@@ -57,16 +60,20 @@ class TestUpdateGroup:
         assert context.get_full_vector() == [1.0, 2.0, 3.0, 4.0]
 
 class TestGetFullVector:
+    """Tests for reading the full vector from the context."""
 
     def test_returns_a_list(self):
+        """The full vector is returned as a list."""
         context = make_two_group_context()
         assert isinstance(context.get_full_vector(), list)
 
     def test_returned_list_has_correct_length(self):
+        """The full vector has one value per dimension."""
         context = make_two_group_context()
         assert len(context.get_full_vector()) == 4
 
     def test_mutating_returned_list_does_not_affect_context(self):
+        """The returned list is a copy, so changing it leaves the context unchanged."""
 
         context = make_two_group_context()
         context.update_group(group_idx=0, sub_solution=[5.0, 6.0])
@@ -78,6 +85,7 @@ class TestGetFullVector:
         assert fresh_copy[0] == 5.0
 
     def test_initial_vector_is_used_when_provided(self):
+        """The context starts with the given initial vector."""
 
         initial = [1.0, 2.0, 3.0, 4.0]
         groups = [[0, 1], [2, 3]]
@@ -87,6 +95,7 @@ class TestGetFullVector:
 
 
 class TestReassignGroups:
+    """Tests for changing which group owns which positions."""
 
     def test_existing_values_are_preserved_after_reassign(self):
         """
@@ -122,5 +131,6 @@ class TestReassignGroups:
         assert full_vector[3] == 4.0
 
 def make_two_group_context():
+    """Returns a 4-D context of zeros with groups [0, 1] and [2, 3]."""
     groups = [[0, 1], [2, 3]]
     return ContextVector(dimension=4, groups=groups)

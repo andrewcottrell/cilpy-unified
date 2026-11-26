@@ -1,3 +1,8 @@
+# examples/ccls_exa.py
+"""Runs CCLS with cooperative solvers (CPSO, CGA and CDE) as the objective
+solver on ConstrainedSphere and G01, next to CCLS with plain PSO, GA and DE.
+"""
+
 from cilpy.problem.constrained import ConstrainedSphere, G01
 from cilpy.runner import ExperimentRunner
 from cilpy.solver.ccls import CoevolutionaryLagrangianSolver

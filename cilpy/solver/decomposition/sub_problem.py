@@ -1,4 +1,6 @@
 # cilpy/solver/decomposition/sub_problem.py
+"""The sub-problem that lets any solver work on one group of variables."""
+
 from typing import List, Tuple
 
 from cilpy.problem import Problem, Evaluation
@@ -81,7 +83,7 @@ class SubSpaceProblem(Problem):
 
     def update_dim_indices(self, new_indices: List[int]) -> None:
         """
-        Updates the group's dimension indices after a regroup event happend.
+        Updates the group's dimension indices after a regroup event.
 
         Called when variables are reassigned between
         groups. Updates the sub-problem's dimension count and bounds in
@@ -107,8 +109,10 @@ class SubSpaceProblem(Problem):
 
     def begin_iteration(self) -> None:
         """
-        A notification called by the ExperimentRunner before each solver
-        iteration (just like in the original problem).
+        Does nothing on purpose.
+
+        The runner already calls begin_iteration once on the original
+        problem, so the sub-problems must not call it again.
         """
         pass
 

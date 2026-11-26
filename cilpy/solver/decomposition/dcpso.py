@@ -10,7 +10,13 @@ from cilpy.solver.decomposition.grouping import (EvenSplitter, GroupingStrategy,
 from cilpy.solver.decomposition.trigger import (RegroupTrigger, restructure_trigger)
 
 class DecompositionCooperativeSolver(CooperativeDecompositionSolver):
-    """Cooperative solver that starts with one group and keeps splitting it."""
+    """Cooperative solver that starts with one group and keeps splitting it.
+
+    It starts as one solver over all the variables. Every time the trigger
+    fires, every group is split, until each group holds one variable. After
+    a split, PSO particles get new random velocities and GA or DE
+    individuals (except the first) get new random positions.
+    """
 
     def __init__(
         self,
@@ -27,7 +33,28 @@ class DecompositionCooperativeSolver(CooperativeDecompositionSolver):
         constraint_handler: Optional[ConstraintHandler] = None,
         **kwargs,
     ):
+        """Initializes the decomposition cooperative solver.
 
+        Args:
+            problem: The full problem to solve.
+            name: The name of the solver.
+            sub_solver_class: The solver class used for every group, for
+                example PSO, GA or DE.
+            sub_solver_params: The parameters passed to every sub-solver.
+            num_groups: The number of groups to start with. Defaults to 1.
+            grouping_strategy: Decides how the variables are put into the
+                starting groups. Defaults to StaticEvenGrouping.
+            group_splitter: Decides how groups are split. Defaults to
+                EvenSplitter with a split factor of 2.
+            regroup_trigger: Decides when to split. If not given, a trigger
+                is built that spaces the splits evenly over the budget.
+            max_iterations: The iteration budget, used to build the default trigger.
+            max_evaluations: The evaluation budget, used to build the default trigger.
+            constraint_handler: Optional constraint handler for the coordinator.
+
+        Raises:
+            ValueError: If no trigger is given and neither or both budgets are given.
+        """
         if regroup_trigger is None:
             if max_iterations is None and max_evaluations is None:
                 raise ValueError(

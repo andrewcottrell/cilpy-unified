@@ -34,8 +34,12 @@ class CEC2010(Problem[List[float], float]):
         """Initialises a CEC 2010 function.
 
         Args:
-            number: The function number from 1 to 20
-            dimension: The number of dimensions
+            number: The function number from 1 to 20.
+            dimension: The number of dimensions.
+
+        Raises:
+            ValueError: If the number is not from 1 to 20.
+            ImportError: If opfunu is not installed.
         """
         if number < 1 or number > 20:
             raise ValueError("The function number must be 1 to 20.")

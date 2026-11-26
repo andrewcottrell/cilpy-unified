@@ -1,4 +1,6 @@
 # cilpy/solver/decomposition/context.py
+"""The context vector shared by the sub-solvers of a cooperative solver."""
+
 from typing import List, Optional
 
 class ContextVector:
@@ -57,7 +59,7 @@ class ContextVector:
         other sub-swarms.
 
         Returns:
-            An independant copy of the internal full vector.
+            An independent copy of the internal full vector.
         """
         return list(self._full_vector)
 
@@ -86,7 +88,7 @@ class ContextVector:
     @staticmethod
     def _validate_groups(dimension: int, groups: List[List[int]]) -> None:
         """
-        Checks if groups do not form a valid partition.
+        Checks that the groups hold every index exactly once.
 
         Args:
             dimension: Expected total number of indices.

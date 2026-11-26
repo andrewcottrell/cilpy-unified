@@ -1,3 +1,10 @@
+# examples/baselines_exa.py
+"""Runs plain PSO, GA and DE as baselines on 100-D Rosenbrock.
+
+The population size equals the total of a cooperative solver with 6 groups
+of 10, so the baselines can be compared with the cooperative solvers.
+"""
+
 from cilpy.problem.unconstrained import Quadratic, Sphere, Ackley, Rastrigin, Rosenbrock
 from cilpy.runner import ExperimentRunner
 from cilpy.solver.de import DE

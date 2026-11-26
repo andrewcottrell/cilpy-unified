@@ -1,3 +1,8 @@
+# examples/cpso_exa.py
+"""Compares CPSO (with PSO and with DE as the sub-solver) with plain PSO on
+100-D Sphere.
+"""
+
 from cilpy.problem.unconstrained import Sphere
 from cilpy.runner import ExperimentRunner
 from cilpy.solver.de import DE
@@ -32,7 +37,7 @@ solver_configs = [
         },
     },
 
-    # Decomposition solver with 10 groups × 5 particles each
+    # Decomposition solver with 6 groups of 10 particles each
     {
         "class": StandardCooperativeSolver,
         "params": {

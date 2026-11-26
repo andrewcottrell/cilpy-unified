@@ -1,3 +1,8 @@
+# examples/baseline_comparison_exa.py
+"""Runs CCLS with PSO, DE and GA as the objective solver on G01, next to
+plain PSO, DE and GA.
+"""
+
 from cilpy.problem.constrained import G01
 from cilpy.runner import ExperimentRunner
 from cilpy.solver.ccls import CoevolutionaryLagrangianSolver

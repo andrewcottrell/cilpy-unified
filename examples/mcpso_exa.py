@@ -1,3 +1,8 @@
+# examples/mcpso_exa.py
+"""Compares MCPSO (even and random merger) with CPSO and plain PSO on
+100-D Rastrigin.
+"""
+
 from cilpy.problem.unconstrained import Rastrigin
 from cilpy.runner import ExperimentRunner
 from cilpy.solver.decomposition.cpso import StandardCooperativeSolver

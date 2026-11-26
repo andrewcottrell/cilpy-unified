@@ -1,3 +1,8 @@
+# examples/drg_vs_cpso_exa.py
+"""Compares DRG with CPSO for PSO, GA and DE as the sub-solver on 500-D
+Sphere, Quadratic, Ackley and Rastrigin.
+"""
+
 from cilpy.problem.unconstrained import Quadratic, Sphere, Ackley, Rastrigin
 from cilpy.runner import ExperimentRunner
 from cilpy.solver.de import DE

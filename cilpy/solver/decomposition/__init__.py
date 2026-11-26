@@ -1,5 +1,9 @@
 # cilpy/solver/decomposition/__init__.py
-"""Decomposition-based solvers for large-scale optimization.
+"""Cooperative decomposition solvers for large-scale optimization.
+
+The package holds the four cooperative solvers (static cooperative, dynamic
+random grouping, decomposition cooperative and merging cooperative) and the
+groupings, splitters, mergers and triggers they are built from.
 """
 
 from cilpy.solver.decomposition.context import ContextVector

@@ -1,4 +1,9 @@
 # examples/dcpso_examples.py
+"""Shows every grouping, splitter and trigger the decomposition cooperative
+solver (DCPSO) can use, on 100-D Rosenbrock with a budget of 1000 x D
+evaluations.
+"""
+
 from cilpy.problem.unconstrained import Rosenbrock
 from cilpy.runner import ExperimentRunner
 from cilpy.solver.decomposition.grouping import (

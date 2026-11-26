@@ -15,10 +15,12 @@ nav:
     - 'Constraint Handler': 'api/constraint_handler.md'
     - 'Compare': 'api/compare.md'
     - 'Runner': 'api/runner.md'
+    - 'Decomposition': 'api/decomposition.md'
   - 'Included':
     - 'Overview': 'lib/index.md'   # high level description of library components, and how they interact.
     - 'Problems': 'lib/problem.md' # documentation on problems included in the library.
     - 'Solvers': 'lib/solver.md'   # documentation on solvers included in the library.
+    - 'Decomposition': 'lib/decomposition.md' # guide to the cooperative decomposition solvers.
     - 'Compare': 'lib/compare.md'  # documentation on comparison included tools in the library.
   - 'Developers':
     - 'Intro': 'dev/index.md'      # developer guide and contribution rules

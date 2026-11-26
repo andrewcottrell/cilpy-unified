@@ -86,6 +86,20 @@ class ExperimentRunner:
         max_iterations: Optional[int] = None,
         max_evaluations: Optional[int] = None,
     ):
+        """Initializes the ExperimentRunner.
+
+        Args:
+            problems: The problems to run every solver on.
+            solver_configurations: Dictionaries with a solver "class", its
+                "params" and an optional "constraint_handler".
+            num_runs: The number of independent runs per solver and problem.
+            max_iterations: The iteration budget of a run.
+            max_evaluations: The fitness evaluation budget of a run. If both
+                budgets are given, a run stops at whichever is reached first.
+
+        Raises:
+            ValueError: If no budget is given or a budget is less than 1.
+        """
 
         if max_iterations is None and max_evaluations is None:
             raise ValueError("either max_iterations or max_evaluations must be given")
@@ -148,6 +162,7 @@ class ExperimentRunner:
     # ------------------------------------------------------------------
 
     def _budget_description(self) -> str:
+        """Returns the budget as text for the console output."""
         parts = []
 
         if self.max_iterations is not None:
@@ -159,6 +174,15 @@ class ExperimentRunner:
         return " or ".join(parts)
 
     def _budget_is_used(self, iteration: int, problem: CountingProblem) -> bool:
+        """Returns True once the iteration or evaluation budget is reached.
+
+        It is only checked between iterations, so a run can use slightly
+        more evaluations than the budget.
+
+        Args:
+            iteration: The number of iterations done so far.
+            problem: The counting problem of the current run.
+        """
 
         if self.max_iterations is not None and iteration >= self.max_iterations:
             return True
@@ -479,6 +503,16 @@ class ExperimentRunner:
         fitness_range: float = 0.0,
         ref_front: Optional[np.ndarray] = None,
     ):
+        """Runs one solver on one problem until the budget is used.
+
+        The problem is wrapped in a new CountingProblem for every run. After
+        every iteration a row is written, with the measurements made inside
+        not_counting so they do not use up the budget.
+
+        Raises:
+            RuntimeError: If only an evaluation budget is given and the solver
+                makes no evaluations in an iteration, so the run would never end.
+        """
         run_start_time = time.time()
         print(f"     --- Starting Run {run_id}/{self.num_runs} ---")
 

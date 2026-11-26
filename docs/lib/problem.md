@@ -1,5 +1,11 @@
 # Included Problems
 
+::: cilpy.problem.unconstrained
+
+::: cilpy.problem.cec2010
+
+::: cilpy.problem.counting
+
 ::: cilpy.problem.mpb
 
 ::: cilpy.problem.cmpb

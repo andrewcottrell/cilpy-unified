@@ -1,3 +1,10 @@
+# examples/cooperative_exa.py
+"""Compares CPSO, CGA and CDE with plain PSO, GA and DE on 100-D Sphere,
+Quadratic, Ackley and Rastrigin.
+
+The plain solvers get the same total population as the cooperative ones.
+"""
+
 from cilpy.problem.unconstrained import Ackley, Quadratic, Rastrigin, Sphere
 from cilpy.runner import ExperimentRunner
 from cilpy.solver.de import DE

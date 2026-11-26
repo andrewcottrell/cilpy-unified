@@ -1,4 +1,8 @@
 # examples/drg_examples.py
+"""Shows every grouping and trigger the dynamic random grouping solver (DRG)
+can use, on 100-D Rosenbrock with a budget of 1000 x D evaluations.
+"""
+
 from cilpy.problem.unconstrained import Rosenbrock
 from cilpy.runner import ExperimentRunner
 from cilpy.solver.decomposition.drg import DynamicRandomGroupingSolver

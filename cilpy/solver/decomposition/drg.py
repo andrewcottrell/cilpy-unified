@@ -1,4 +1,6 @@
 # cilpy/solver/decomposition/drg.py
+"""Dynamic random grouping solver (DRG)."""
+
 from typing import Optional, Type
 from cilpy.problem import Problem
 from cilpy.solver import Solver
@@ -8,7 +10,12 @@ from cilpy.solver.decomposition.grouping import GroupingStrategy, RandomGrouping
 from cilpy.solver.decomposition.trigger import RegroupTrigger, FixedIntervalTrigger
 
 class DynamicRandomGroupingSolver(CooperativeDecompositionSolver):
-    """Cooperative solver that randomly regroups the dimensions when the trigger fires."""
+    """Cooperative solver that randomly regroups the dimensions when the trigger fires.
+
+    Regrouping gives variables that interact a chance to end up in the same
+    group. The search state is kept across a regroup, and a group's new best
+    is only written into the context when it does not make the context worse.
+    """
 
     def __init__(
         self,
@@ -22,7 +29,22 @@ class DynamicRandomGroupingSolver(CooperativeDecompositionSolver):
         constraint_handler: Optional[ConstraintHandler] = None,
         **kwargs,
     ):
+        """Initializes the dynamic random grouping solver.
 
+        Args:
+            problem: The full problem to solve.
+            name: The name of the solver.
+            num_groups: The number of groups. Ignored by RandomGroupSizeGrouping,
+                which picks its own number of groups.
+            sub_solver_class: The solver class used for every group, for
+                example PSO, GA or DE.
+            sub_solver_params: The parameters passed to every sub-solver.
+            grouping_strategy: Decides how the variables are put into groups
+                at the start and at every regroup. Defaults to RandomGrouping.
+            regroup_trigger: Decides when to regroup. Defaults to
+                FixedIntervalTrigger with an interval of 50 iterations.
+            constraint_handler: Optional constraint handler for the coordinator.
+        """
         super().__init__(
             problem=problem,
             name=name,
@@ -39,7 +61,7 @@ class DynamicRandomGroupingSolver(CooperativeDecompositionSolver):
         self._regroup_trigger.reset()
 
     def _post_step_hook(self) -> None:
-        """Randomly regroups the dimensions when the trigger fires, keeping the same number of groups."""
+        """Regroups the dimensions with the grouping strategy when the trigger fires."""
 
         state = self._build_state_dict()
 

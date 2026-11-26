@@ -1,4 +1,8 @@
 # examples/cpso_examples.py
+"""Shows every grouping the static cooperative solver (CPSO) can use, on
+100-D Rastrigin with a budget of 1000 x D evaluations.
+"""
+
 from cilpy.problem.unconstrained import Rastrigin
 from cilpy.runner import ExperimentRunner
 from cilpy.solver.decomposition.cpso import StandardCooperativeSolver

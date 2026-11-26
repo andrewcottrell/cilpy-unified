@@ -9,8 +9,10 @@ from cilpy.solver.decomposition.context import ContextVector
 from cilpy.solver.decomposition.sub_problem import SubSpaceProblem
 
 class TestInitialisation:
+    """Tests for the dimension and bounds of a new sub-problem."""
 
     def test_dimension_equals_the_number_of_indices_in_the_group(self):
+        """A group of 3 indices gives a 3-D sub-problem."""
 
         original_problem = make_temp_problem(dimension=6)
         context = make_context(6, [[0, 1, 2], [3, 4, 5]])
@@ -22,6 +24,7 @@ class TestInitialisation:
         assert sub_problem.dimension == 3
 
     def test_bounds_are_extracted_for_the_correct_indices(self):
+        """The sub-problem takes only the bounds of its own indices."""
 
         original_problem = make_temp_problem(dimension=6)
         original_problem.bounds = (
@@ -39,8 +42,10 @@ class TestInitialisation:
 
 
 class TestEvaluate:
+    """Tests for evaluating a partial solution through the context."""
 
     def test_sub_solution_values_land_at_the_correct_global_indices(self):
+        """The partial solution is written at the group's own global indices."""
 
         original_problem = make_temp_problem(dimension=6)
         context = make_context(6, [[0, 2, 4], [1, 3, 5]])
@@ -56,6 +61,7 @@ class TestEvaluate:
         assert full_vector_passed_to_original[4] == 30.0
 
     def test_positions_not_owned_by_this_group_come_from_the_context(self):
+        """The other positions of the full vector are filled from the context."""
 
         original_problem = make_temp_problem(dimension=6)
         context = make_context(6, [[0, 2, 4], [1, 3, 5]])
@@ -72,6 +78,7 @@ class TestEvaluate:
         assert full_vector_passed_to_original[5] == 9.0
 
     def test_evaluation_result_is_returned_unchanged(self):
+        """The evaluation of the original problem is returned as it is, constraints included."""
 
         original_problem = make_temp_problem(dimension=4)
         expected_evaluation = Evaluation(
@@ -89,6 +96,7 @@ class TestEvaluate:
         assert returned_evaluation is expected_evaluation
 
     def test_evaluate_does_not_write_values_back_into_the_context(self):
+        """Evaluating a partial solution leaves the shared context unchanged."""
 
         original_problem = make_temp_problem(dimension=4)
         context = make_context(4, [[0, 1], [2, 3]])
@@ -101,8 +109,10 @@ class TestEvaluate:
         assert context.get_full_vector() == [0.0, 0.0, 0.0, 0.0]
 
 class TestBeginIteration:
+    """Tests that the sub-problem does not repeat begin_iteration."""
 
     def test_begin_iteration_does_not_forward_to_the_original_problem(self):
+        """The runner calls begin_iteration once, so the sub-problem must not call it again."""
 
         original_problem = make_temp_problem(dimension=4)
         context = make_context(4, [[0, 1], [2, 3]])
@@ -117,6 +127,7 @@ class TestBeginIteration:
 # --- Helper functions ---
 
 def make_temp_problem(dimension=6, lower=-5.0, upper=5.0):
+    """Returns a mock problem that always gives a fitness of 0."""
 
     mock_problem = MagicMock(spec=Problem)
     mock_problem.dimension = dimension

@@ -1,3 +1,8 @@
+# examples/dcpso_exa.py
+"""Compares DCPSO (even and random splitter) with CPSO and plain PSO on
+Rosenbrock.
+"""
+
 from cilpy.problem.unconstrained import Rosenbrock
 from cilpy.runner import ExperimentRunner
 from cilpy.solver.decomposition.cpso import StandardCooperativeSolver

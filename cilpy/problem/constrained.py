@@ -152,7 +152,11 @@ class C02(Problem[List[float], float]):
 
 
 class ConstrainedSphere(Problem[List[float], float]):
-    """Sphere function for testing with large dimensions"""
+    """Sphere function with one linear constraint, for testing with large dimensions.
+
+    The constraint is sum(x) <= constraint_rhs, so it holds when
+    sum(x) - constraint_rhs is at most zero.
+    """
 
     def __init__(
         self,
@@ -160,6 +164,14 @@ class ConstrainedSphere(Problem[List[float], float]):
         domain: Tuple[float, float] = (-100.0, 100.0),
         constraint_rhs: float = None,
     ):
+        """Initializes the ConstrainedSphere.
+
+        Args:
+            dimension: The number of decision variables.
+            domain: The (min, max) search range for every variable.
+            constraint_rhs: The right-hand side of the constraint. Defaults
+                to minus the dimension, which excludes the origin.
+        """
         bounds = ([domain[0]] * dimension, [domain[1]] * dimension)
         super().__init__(dimension, bounds, f"ConstrainedSphere_{dimension}D")
         if constraint_rhs is None:
@@ -168,17 +180,21 @@ class ConstrainedSphere(Problem[List[float], float]):
             self._constraint_rhs = float(constraint_rhs)
 
     def evaluate(self, solution: List[float]) -> Evaluation[float]:
+        """Returns the sum of squares and the constraint violation."""
         fitness = sum(x ** 2 for x in solution)
         constraint_violation = sum(solution) - self._constraint_rhs
         return Evaluation(fitness=fitness, constraints_inequality=[constraint_violation])
 
     def is_dynamic(self) -> Tuple[bool, bool]:
+        """Indicates that the problem is not dynamic."""
         return (False, False)
 
     def is_multi_objective(self) -> bool:
+        """Indicates that the problem is not multi-objective."""
         return False
 
     def get_fitness_bounds(self) -> Tuple[float, float]:
+        """Returns the min and max fitness values, ignoring the constraint."""
         lower_bound = abs(self.bounds[0][0])
         upper_bound = abs(self.bounds[1][0])
         largest_bound = max(lower_bound, upper_bound)

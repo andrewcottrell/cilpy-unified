@@ -1,5 +1,9 @@
 # cilpy/solver/decomposition/trigger.py
-"""Regroup triggers for cooperative decomposition solvers."""
+"""Triggers that decide when a cooperative solver changes its groups.
+
+Also holds the helpers that space the splits or merges of DCPSO and
+MCPSO evenly over the budget.
+"""
 
 import math
 from typing import Optional
@@ -8,9 +12,8 @@ from abc import ABC, abstractmethod
 class RegroupTrigger(ABC):
     """Abstract base for regroup triggers.
 
-    A regroup trigger chooses when the coordinator should change
-    current dimension grouping and use a new one.
-
+    A regroup trigger chooses when the coordinator should replace the
+    current grouping with a new one.
     """
 
     @abstractmethod
@@ -18,18 +21,17 @@ class RegroupTrigger(ABC):
         """Decides whether a regroup event should happen now.
 
         Args:
-            state: Is the coordinator state dictionary. It holds the keys
-                iteration and best_fitness.
+            state: The coordinator state dictionary. It holds the keys
+                iteration, best_fitness and evaluations.
 
         Returns:
             True when the coordinator should regroup and False otherwise.
         """
 
     def on_triggered(self, state: dict) -> None:
-        """A hook called immediately after a regroup fires.
+        """A hook called immediately after a regroup happens.
 
-        Used for triggers that keep
-        internal counters override this to reset them.
+        Triggers that keep internal counters override this to update them.
 
         Args:
             state: The same state dictionary passed to should_trigger.
@@ -40,9 +42,7 @@ class RegroupTrigger(ABC):
 
 
 class FixedIntervalTrigger(RegroupTrigger):
-    """Triggers every fixed amount of iterations. Never fires at
-        iteration zero.
-    """
+    """Triggers every fixed number of iterations. Never fires at iteration zero."""
 
     def __init__(self, interval: int) -> None:
         """
@@ -62,7 +62,7 @@ class FixedIntervalTrigger(RegroupTrigger):
         self._interval = interval
 
     def should_trigger(self, state: dict) -> bool:
-        """Returns True when a trigger should fire."""
+        """Returns True on every interval-th iteration."""
 
         iteration = state["iteration"]
 
@@ -73,10 +73,22 @@ class FixedIntervalTrigger(RegroupTrigger):
 
 
 class EvaluationIntervalTrigger(RegroupTrigger):
-    """Triggers every fixed amount of fitness evaluations."""
+    """Triggers every fixed number of fitness evaluations.
+
+    An iteration can use many evaluations, so the trigger fires at the end
+    of the first iteration that reaches the next threshold.
+    """
 
     def __init__(self, interval: int) -> None:
-        """Initializes the EvaluationIntervalTrigger."""
+        """Initializes the EvaluationIntervalTrigger.
+
+        Args:
+            interval: Number of fitness evaluations between regroup events.
+                This must be at least 1.
+
+        Raises:
+            ValueError: If interval is less than 1.
+        """
 
         if interval < 1:
             raise ValueError(f"interval must be at least 1, but got {interval}")
@@ -102,19 +114,18 @@ class EvaluationIntervalTrigger(RegroupTrigger):
 
 
 class StagnationTrigger(RegroupTrigger):
-    """This triggers when the search stops making good progress and begins to stagnate. 
-    """
+    """Triggers when the search stops making meaningful progress."""
 
     def __init__(self, patience: int, tolerance: float = 1e-4) -> None:
         """
         Initializes the StagnationTrigger.
 
         Args:
-            patience: Number of iterations without good
-                improvement that is alowed before a regroup is triggered.
-
-            tolerance: The amount of improvement that is seen as meaningfull.
-                This amount is relative towards the fitness.
+            patience: Number of iterations without a meaningful
+                improvement that are allowed before a regroup is triggered.
+            tolerance: The improvement that is seen as meaningful, as a
+                fraction of the best fitness so far. For example 1e-4 means
+                the fitness must improve by more than 0.01 percent.
 
         Raises:
             ValueError: If patience is less than 1 or tolerance is negative.
@@ -135,10 +146,10 @@ class StagnationTrigger(RegroupTrigger):
 
     def _is_meaningful_improvement(self, current_best_fitness: float) -> bool:
         """
-        Decides whether the current fitness improved meaningfull enough or not.
+        Decides whether the current fitness improved enough to be meaningful.
 
         Args:
-            current_best_fitness: The coordinators best assembled fitness so far.
+            current_best_fitness: The coordinator's best assembled fitness so far.
 
         Returns:
             True if the improvement is at least the required fraction.
@@ -200,6 +211,10 @@ class NeverTrigger(RegroupTrigger):
 def restructure_interval(total_budget: int, dimension: int, factor: int) -> int:
     """Calculates how much of the budget should be between regroup events.
 
+    Going from one group to one group per dimension (or back) takes
+    log(dimension) / log(factor) restructures, which gives one more phase
+    than restructures. The budget is shared equally between the phases.
+
     Args:
         total_budget: The total budget of the run in iterations or in
             fitness evaluations.
@@ -207,7 +222,8 @@ def restructure_interval(total_budget: int, dimension: int, factor: int) -> int:
         factor: Amount of parts a group splits into.
 
     Returns:
-        The interval between regroup events in the same unit as total_budget.
+        The interval between regroup events in the same unit as total_budget,
+        rounded down and at least 1.
 
     Raises:
         ValueError: if total_budget or dimension is below 1 or factor is below 2.
@@ -235,13 +251,16 @@ def restructure_trigger(dimension: int, factor: int, max_iterations: Optional[in
     """Creates a trigger that spaces the restructures evenly over the budget.
 
     Args:
-        dimension: number of decision variables
-        factor: Amount of parts a group splits into
+        dimension: Number of decision variables.
+        factor: Number of parts a group splits into, or number of groups
+            merged into one.
         max_iterations: The iteration budget of the run.
-        max_evaluations: The fitness evaluation budget of the run.
+        max_evaluations: The fitness evaluation budget of the run. Used
+            instead of max_iterations when both are given.
 
     Returns:
-        An EvaluationIntervalTrigger for an evaluation budget
+        An EvaluationIntervalTrigger for an evaluation budget, otherwise a
+        FixedIntervalTrigger for an iteration budget.
     """
 
     if max_evaluations is not None:

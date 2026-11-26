@@ -16,10 +16,20 @@ from cilpy.solver.decomposition.sub_problem import SubSpaceProblem
 PER_DIMENSION_STATE_ATTRIBUTES = ("population", "velocities", "pbest_positions")
 
 class PlaceholderProblem(Problem):
-    """A placegolder sub-problem that never evaluates the real function"""
+    """A placeholder sub-problem that never evaluates the real function.
+
+    New sub-solvers are built on it during a regroup, so building them
+    costs no fitness evaluations. Their state is then copied back in from
+    the old sub-solvers.
+    """
 
     def __init__(self, sub_problem: SubSpaceProblem) -> None:
-        """Initializes the placeholder"""
+        """Initializes the placeholder.
+
+        Args:
+            sub_problem: The real sub-problem. Its dimension, bounds and
+                name are copied so the sub-solver is built with the right shape.
+        """
         super().__init__(sub_problem.dimension, sub_problem.bounds, sub_problem.name)
         self._sub_problem = sub_problem
 
@@ -37,7 +47,14 @@ class PlaceholderProblem(Problem):
 
 
 class CooperativeDecompositionSolver(Solver):
-    """Abstract base that partitions a D-dim problem into sub-problems."""
+    """Abstract coordinator that splits a problem into groups of variables.
+
+    Every group gets its own sub-solver, which can be any cilpy solver. A
+    sub-solver evaluates its part of a solution by inserting it into the
+    shared context vector, which holds the best value found for every
+    variable. Subclasses decide what happens to the groups during a run by
+    implementing _post_step_hook.
+    """
 
     def __init__(
         self,
@@ -51,7 +68,24 @@ class CooperativeDecompositionSolver(Solver):
         only_accept_improvements: bool = False,
         **kwargs,
     ):
-        """Initializes the cooperative solver"""
+        """Initializes the cooperative solver.
+
+        Args:
+            problem: The full problem to solve.
+            name: The name of the solver.
+            num_groups: The number of groups to start with. Must be between
+                1 and the problem dimension.
+            sub_solver_class: The solver class used for every group, for
+                example PSO, GA or DE.
+            sub_solver_params: The parameters passed to every sub-solver.
+            grouping_strategy: Decides how the variables are put into groups.
+            constraint_handler: Optional constraint handler for the coordinator.
+            only_accept_improvements: If True, a group's new best is only
+                written into the context when it does not make the context worse.
+
+        Raises:
+            ValueError: If num_groups is not between 1 and the problem dimension.
+        """
         super().__init__(problem, name, constraint_handler)
 
         self._only_accept_improvements = only_accept_improvements
@@ -100,7 +134,19 @@ class CooperativeDecompositionSolver(Solver):
         num_groups: int,
         evaluate_starting_population: bool = True,
     ) -> List[Solver]:
-        """Creates one sub-solver for each group"""
+        """Creates one sub-solver for each group.
+
+        Args:
+            sub_solver_class: The solver class to create.
+            sub_solver_params: The parameters passed to every sub-solver.
+            num_groups: The number of sub-solvers to create.
+            evaluate_starting_population: If False, the sub-solvers are built
+                on a PlaceholderProblem so their starting population costs no
+                evaluations. Used during a regroup.
+
+        Returns:
+            One sub-solver per group, each linked to its sub-problem.
+        """
         solvers = []
         base_name = sub_solver_params.get("name", self.name)
         for k in range(num_groups):
@@ -117,29 +163,34 @@ class CooperativeDecompositionSolver(Solver):
         return solvers
 
     def _sync_context(self) -> None:
-        """Pull each sub-solver's best partial solution into the context."""
+        """Writes each sub-solver's best partial solution into the context."""
         for k, sub_solver in enumerate(self._sub_solvers):
             best_sub_solution, _ = sub_solver.get_result()[0]
             self._context.update_group(k, best_sub_solution)
 
     def _get_global_best(self) -> Tuple[List[float], Evaluation]:
-        """Build the full vector from context and evaluate on the original problem."""
+        """Evaluates the context vector on the original problem.
+
+        Returns:
+            A tuple of the context vector and its evaluation.
+        """
         full_vector = self._context.get_full_vector()
         evaluation = self.problem.evaluate(full_vector)
         return (full_vector, evaluation)
 
     def step(self) -> None:
-        """Performs one iteration
+        """Performs one iteration.
 
-        After each sub-solver's step its best partial solution gets written into
-        the context so the next sub-solver already works with it.
+        Every sub-solver takes one step in turn. After each sub-solver's step
+        its best partial solution gets written into the context, so the next
+        sub-solver already works with it. The subclass hook runs at the end.
         """
         self._iteration += 1
 
         assembled_evaluation = self._counting_problem.evaluate(self._context.get_full_vector())
 
         for k, sub_solver in enumerate(self._sub_solvers):
-            # The context may have changed since this sub-solver last step
+            # The context may have changed since this sub-solver's last step
             sub_solver.refresh_evaluations()
 
             # The sub-solver's best is never worse than its part of the context
@@ -178,7 +229,10 @@ class CooperativeDecompositionSolver(Solver):
 
     @abstractmethod
     def _post_step_hook(self) -> None:
-        """Hook at the end of each step.
+        """Runs at the end of each step.
+
+        Subclasses use it to decide when and how the groups change, for
+        example by regrouping, splitting or merging them.
         """
 
     def _build_state_dict(self) -> dict:
@@ -187,7 +241,7 @@ class CooperativeDecompositionSolver(Solver):
 
         Returns:
             A dictionary with the current iteration count, the best
-            assembled fitness reached so until now and the number of
+            assembled fitness reached so far and the number of
             evaluations used so far.
         """
         if self._best_fitness_history:
@@ -206,8 +260,11 @@ class CooperativeDecompositionSolver(Solver):
         """
         Checks that every sub-solver holds the same number of individuals.
 
+        The state is copied column by column during a regroup, so every
+        sub-solver needs the same number of rows.
+
         Raises:
-            ValueError: If the sub solvers hold diferent numbers of individuals.
+            ValueError: If the sub-solvers hold different numbers of individuals.
         """
         population_sizes = set()
 
@@ -225,11 +282,13 @@ class CooperativeDecompositionSolver(Solver):
         Reads one sub-solver state matrix into per-dimension columns.
 
         Args:
-            attribute_name: Name of a sub-solver attribute
+            attribute_name: Name of a sub-solver attribute, for example
+                population or velocities.
 
         Returns:
             A dictionary mapping each global dimension index to the list of
-            values the individuals hold for that dimension..
+            values the individuals hold for that dimension. None if a
+            sub-solver does not have the attribute.
         """
         for sub_solver in self._sub_solvers:
             if not hasattr(sub_solver, attribute_name):
@@ -268,6 +327,9 @@ class CooperativeDecompositionSolver(Solver):
         """
         Makes the list of sub-problems match the new grouping.
 
+        Existing sub-problems are reused with their new indices, extra ones
+        are removed and missing ones are created.
+
         Args:
             new_groups: The new assignment of dimensions into groups.
         """
@@ -285,8 +347,16 @@ class CooperativeDecompositionSolver(Solver):
         """
         Replaces the current grouping with a new grouping of all the dimensions.
 
+        The positions, velocities and personal bests are saved per dimension,
+        new sub-solvers are built without using evaluations, and the saved
+        state is written back in the new arrangement. The context vector
+        keeps its values, so no search progress is lost.
+
         Args:
-            new_groups: The new assignments of range=dimension into groups.
+            new_groups: The new assignment of all dimensions into groups.
+
+        Raises:
+            ValueError: If the sub-solvers hold different numbers of individuals.
         """
 
         self._require_uniform_population_size()
@@ -318,7 +388,11 @@ class CooperativeDecompositionSolver(Solver):
         self._last_regroup_iteration = self._iteration
 
     def _give_new_velocities(self) -> None:
-        """Gives every particle a new random velocity"""
+        """Gives every particle a new random velocity.
+
+        Used by DCPSO after a split. Each velocity is drawn from
+        [-range, range] of its dimension. Solvers without velocities are skipped.
+        """
 
         for sub_solver in self._sub_solvers:
 
@@ -336,7 +410,12 @@ class CooperativeDecompositionSolver(Solver):
                     velocity[d] = random.uniform(-span_size, span_size)
 
     def _give_new_positions(self) -> None:
-        """Gives new random positions to GA and DE individuals"""
+        """Gives new random positions to GA and DE individuals.
+
+        Used by DCPSO after a split. The first individual is kept and the
+        rest are placed randomly inside the bounds. Solvers with velocities
+        are skipped.
+        """
 
         for sub_solver in self._sub_solvers:
 
@@ -351,7 +430,13 @@ class CooperativeDecompositionSolver(Solver):
                     individual[d] = random.uniform(lower_bounds[d], upper_bounds[d])
 
     def get_population(self) -> List[List[float]]:
-        """Returns every sub-solver's individuals as full-dimension vectors"""
+        """Returns every sub-solver's individuals as full-dimension vectors.
+
+        Each individual is inserted into a copy of the context vector.
+
+        Returns:
+            One full-dimension vector per individual of every sub-solver.
+        """
         expanded = []
 
         for k, sub_solver in enumerate(self._sub_solvers):
@@ -365,7 +450,14 @@ class CooperativeDecompositionSolver(Solver):
         return expanded
 
     def get_population_evaluations(self) -> List[Evaluation]:
-        """Evaluates the full-dimension population on the original problem."""
+        """Evaluates the full-dimension population on the original problem.
+
+        This costs one evaluation per individual. The runner calls it inside
+        not_counting, so it does not use up the evaluation budget there.
+
+        Returns:
+            The evaluation of every vector from get_population.
+        """
 
         evaluations = []
         for individual in self.get_population():
@@ -374,5 +466,9 @@ class CooperativeDecompositionSolver(Solver):
         return evaluations
 
     def get_result(self) -> List[Tuple[List[float], Evaluation]]:
-        """Returns the context vector and its evaluation as the best solution."""
+        """Returns the context vector and its evaluation as the best solution.
+
+        Returns:
+            A list with one tuple of the context vector and its evaluation.
+        """
         return [self._get_global_best()]

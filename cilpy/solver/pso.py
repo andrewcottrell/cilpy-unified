@@ -56,6 +56,7 @@ class PSO(Solver[List[float], float]):
         detect_changes: bool = False,
         max_velocity: Optional[float] = None,
         bound_handling: str = "clamp",
+        initial_velocity_scale: float = 0.1,
         **kwargs,
     ):
         """
@@ -84,12 +85,15 @@ class PSO(Solver[List[float], float]):
             bound_handling: What happens when a particle leaves the bounds.
                "clamp" puts it on the bound, "reflect" bounces it back and
                "none" leaves it outside, where it cannot become a personal best.
+            initial_velocity_scale: Initial velocities are drawn uniformly
+               from +/- this fraction of each dimension's range. Defaults to
+               0.1.
             **kwargs: Additional keyword arguments (not used in this canonical
                PSO).
 
         Raises:
-            ValueError: If bound_handling is not a known option or
-               max_velocity is not positive.
+            ValueError: If bound_handling is not a known option, or
+               max_velocity or initial_velocity_scale is not positive.
         """
         super().__init__(problem, name, constraint_handler=constraint_handler)
 
@@ -99,6 +103,10 @@ class PSO(Solver[List[float], float]):
 
         if max_velocity is not None and max_velocity <= 0:
             raise ValueError(f"max_velocity must be positive, not {max_velocity}")
+
+        if initial_velocity_scale <= 0:
+            raise ValueError(
+                f"initial_velocity_scale must be positive, not {initial_velocity_scale}")
 
         self.swarm_size = swarm_size
         self.w = w
@@ -122,7 +130,8 @@ class PSO(Solver[List[float], float]):
 
         # Initialize swarm
         self.population = self._initialize_positions()
-        # Initial velocities: up to 25% of each variable's range.
+        # Initial velocities: up to initial_velocity_scale of each variable's range.
+        self.initial_velocity_scale = initial_velocity_scale
         self.velocities = [
             [
                 (
@@ -130,7 +139,7 @@ class PSO(Solver[List[float], float]):
                         -abs(upper_bounds[i] - lower_bounds[i]),
                         abs(upper_bounds[i] - lower_bounds[i]),
                     )
-                    * 0.25
+                    * initial_velocity_scale
                 )
                 for i in range(self.problem.dimension)
             ]

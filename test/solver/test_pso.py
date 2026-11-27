@@ -133,3 +133,25 @@ class TestPSOChangeDetection:
         )
         _run(solver, problem, 50)
         assert solver.objective_solver.n_changes_detected == 50 // 10
+
+
+class TestPSOInitialVelocity:
+    """`initial_velocity_scale` bounds the initial velocities."""
+
+    def _max_ratio(self, **kwargs):
+        random.seed(0)
+        problem = ShiftingSphere(dynamic=False)
+        pso = PSO(problem, "p", 50, 0.7, 1.5, 1.5, **kwargs)
+        return max(abs(v) / 10.0 for vel in pso.velocities for v in vel)
+
+    def test_default_is_ten_percent(self):
+        assert 0.05 < self._max_ratio() <= 0.1
+
+    def test_custom_scale(self):
+        assert 0.1 < self._max_ratio(initial_velocity_scale=0.25) <= 0.25
+
+    def test_rejects_non_positive_scale(self):
+        import pytest
+        with pytest.raises(ValueError):
+            PSO(ShiftingSphere(dynamic=False), "p", 5, 0.7, 1.5, 1.5,
+                initial_velocity_scale=0.0)

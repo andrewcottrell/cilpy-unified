@@ -8,6 +8,7 @@ import numpy as np
 from typing import Any, Dict, List, Optional, Tuple, Type, Sequence
 
 from cilpy.problem import Problem, Evaluation
+from cilpy.problem.counting import CountingProblem
 from cilpy.solver import Solver
 from cilpy.compare.metrics import (
     inverted_generational_distance,
@@ -18,31 +19,6 @@ from cilpy.compare.metrics import (
     spacing,
     spread,
 )
-
-
-class _EvaluationCounter:
-    """Counts a solver's evaluations of a problem during one run.
-
-    The problem's `evaluate` is wrapped on the instance and restored by
-    `restore`. Counting happens only while `active` is set, so evaluations
-    made by the runner to measure the result are not counted.
-    """
-
-    def __init__(self, problem: Problem):
-        self.problem = problem
-        self.count = 0
-        self.active = False
-        evaluate = problem.evaluate
-
-        def counted(solution):
-            if self.active:
-                self.count += 1
-            return evaluate(solution)
-
-        problem.evaluate = counted
-
-    def restore(self) -> None:
-        del self.problem.evaluate
 
 
 class ExperimentRunner:
@@ -66,6 +42,12 @@ class ExperimentRunner:
         values of the columns above, the front feasibility (%), the feasible
         front, P_RED, the run time, and the number of problem evaluations made
         by the solver (evaluations made to measure the result are not counted).
+
+    Both files end with an ``evaluations`` column: the solver's evaluations
+    so far (per iteration) or in total (per run).
+
+    A run stops after ``max_iterations`` iterations or ``max_evaluations``
+    solver evaluations, whichever comes first. At least one must be given.
     """
 
     def __init__(
@@ -73,8 +55,9 @@ class ExperimentRunner:
         problems: Sequence[Problem],
         solver_configurations: List[Dict[str, Any]],
         num_runs: int,
-        max_iterations: int,
+        max_iterations: Optional[int] = None,
         output_dir: str = "out",
+        max_evaluations: Optional[int] = None,
     ):
         """
         Initializes the ExperimentRunner.
@@ -88,10 +71,17 @@ class ExperimentRunner:
                 automatically by the runner and should not be included.
             num_runs: The number of independent runs for each
                 solver-problem pair.
-            max_iterations: The number of iterations (`solver.step()` calls)
-                per run.
+            max_iterations: The iteration budget (`solver.step()` calls) of a
+                run.
             output_dir: Directory for the result CSVs. Defaults to "out",
                 relative to the current working directory.
+            max_evaluations: The fitness evaluation budget of a run. It is
+                checked between iterations, so a run can use slightly more.
+                If both budgets are given, a run stops at whichever is
+                reached first.
+
+        Raises:
+            ValueError: If no budget is given or a budget is less than 1.
 
         Solver Configuration Format:
             .. code-block:: python
@@ -108,10 +98,18 @@ class ExperimentRunner:
                     # ... more configurations
                 ]
         """
+        if max_iterations is None and max_evaluations is None:
+            raise ValueError("either max_iterations or max_evaluations must be given")
+        if max_iterations is not None and max_iterations < 1:
+            raise ValueError(f"max_iterations must be at least 1, but got {max_iterations}")
+        if max_evaluations is not None and max_evaluations < 1:
+            raise ValueError(f"max_evaluations must be at least 1, but got {max_evaluations}")
+
         self.problems = problems
         self.solver_configurations = solver_configurations
         self.num_runs = num_runs
         self.max_iterations = max_iterations
+        self.max_evaluations = max_evaluations
         self.output_dir = output_dir
 
     # Public interface
@@ -140,7 +138,7 @@ class ExperimentRunner:
                 print(f"\n  -> Starting Experiment: {solver_name} on {problem.name}")
                 print(
                     f"     Configuration: {self.num_runs} runs, "
-                    f"{self.max_iterations} iterations/run."
+                    f"{self._budget_description()}."
                 )
                 print(f"     Results will be saved to: {output_file_path}")
 
@@ -156,6 +154,23 @@ class ExperimentRunner:
         print(f"Total execution time: {total_end_time - total_start_time:.2f}s")
 
     # Shared helpers
+
+    def _budget_description(self) -> str:
+        """Returns the run budget as text for the console output."""
+        parts = []
+        if self.max_iterations is not None:
+            parts.append(f"{self.max_iterations} iterations/run")
+        if self.max_evaluations is not None:
+            parts.append(f"{self.max_evaluations} evaluations/run")
+        return " or ".join(parts)
+
+    def _budget_is_used(self, iteration: int, problem: CountingProblem) -> bool:
+        """Returns True once the iteration or evaluation budget is reached."""
+        if self.max_iterations is not None and iteration >= self.max_iterations:
+            return True
+        if self.max_evaluations is not None and problem.evaluations >= self.max_evaluations:
+            return True
+        return False
 
     def _is_solution_feasible(self, evaluation: Evaluation, tolerance: float = 1e-6) -> bool:
         if evaluation is None:
@@ -195,7 +210,7 @@ class ExperimentRunner:
     _SO_MAIN_HEADER = [
         "run_id", "iteration", "best_fitness", "population_feasibility_pct",
         "population_diversity", "relative_error", "is_feasible",
-        "optimum_value", "worst_value",
+        "optimum_value", "worst_value", "evaluations",
     ]
 
     _SO_SUMMARY_HEADER = [
@@ -271,7 +286,7 @@ class ExperimentRunner:
     _MO_MAIN_HEADER = [
         "run_id", "iteration", "archive_size", "igd", "gd", "hypervolume",
         "spacing", "spread", "population_feasibility_pct",
-        "population_diversity", "relative_error", "front",
+        "population_diversity", "relative_error", "front", "evaluations",
     ]
 
     _MO_SUMMARY_HEADER = [
@@ -451,24 +466,22 @@ class ExperimentRunner:
             handler_params = constraint_handler_config.get("params", {})
             current_params["constraint_handler"] = handler_class(**handler_params)
 
-        # Count the solver's problem evaluations
-        counter = _EvaluationCounter(problem_for_run)
-        try:
-            counter.active = True
-            solver = solver_class(**current_params)
-            counter.active = False
+        # Count the solver's problem evaluations with a fresh counter per run.
+        # Counting is switched off while the runner measures the result.
+        counted_problem = CountingProblem(problem_for_run)
+        current_params["problem"] = counted_problem
+        solver = solver_class(**current_params)
+        with counted_problem.not_counting():
             self._iterate(
-                solver, counter, run_id, run_start_time, main_writer,
+                solver, counted_problem, run_id, run_start_time, main_writer,
                 summary_file_path, is_multi_objective, bounds_known, f_min,
                 f_max, fitness_range, ref_front,
             )
-        finally:
-            counter.restore()
 
     def _iterate(
         self,
         solver: Solver,
-        counter: _EvaluationCounter,
+        counted_problem: CountingProblem,
         run_id: int,
         run_start_time: float,
         main_writer,
@@ -487,11 +500,22 @@ class ExperimentRunner:
         relative_error_history: List[float] = []
         hv_ref: Optional[Tuple[float, float]] = None
 
-        for iteration in range(1, self.max_iterations + 1):
+        iteration = 0
+        while not self._budget_is_used(iteration, counted_problem):
+            iteration += 1
+            evaluations_before_step = counted_problem.evaluations
             solver.problem.begin_iteration()
-            counter.active = True
-            solver.step()
-            counter.active = False
+            with counted_problem.counting():
+                solver.step()
+
+            # Without this check a solver that never evaluates would loop forever.
+            if (counted_problem.evaluations == evaluations_before_step
+                    and self.max_iterations is None):
+                raise RuntimeError(
+                    f"{solver.name} made no fitness evaluations in iteration "
+                    f"{iteration}, so the evaluation budget can never be "
+                    "reached. Set max_iterations as well."
+                )
 
             if is_multi_objective:
                 # Dynamic problems: refresh the true front every iteration.
@@ -511,6 +535,7 @@ class ExperimentRunner:
                     relative_error_history,
                 )
 
+            row.append(counted_problem.evaluations)
             main_writer.writerow(row)
 
         run_time = time.time() - run_start_time
@@ -551,12 +576,12 @@ class ExperimentRunner:
                 w.writerow(self._mo_summary_row(
                     problem_name, solver_name, run_id, solver,
                     hv_ref, ref_front, relative_error_history, run_time,
-                    counter.count,
+                    counted_problem.evaluations,
                 ))
             else:
                 w.writerow(self._so_summary_row(
                     problem_name, solver_name, run_id, solver,
-                    relative_error_history, run_time, counter.count,
+                    relative_error_history, run_time, counted_problem.evaluations,
                 ))
 
     def _run_single_experiment(

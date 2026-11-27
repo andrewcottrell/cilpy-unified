@@ -144,6 +144,25 @@ class Solver(ABC, Generic[SolutionType, FitnessType]):
              get_population() to use metrics that require it."""
         )
 
+    def refresh_evaluations(self) -> None:
+        """Re-evaluates all stored fitness values under the current problem state.
+
+        Called by cooperative decomposition solvers before each sub-solver
+        steps, so that the solver comparisons use fitness values that are
+        consistent with the current context vector instead of values from a
+        previous context.
+        """
+        pass
+
+    def accept_best(self, solution: SolutionType, evaluation: Evaluation[FitnessType]) -> None:
+        """Gives the solver a known good solution so that its best is never worse than it
+
+        Args:
+            solution: The known good solution.
+            evaluation: The evaluation of that solution.
+        """
+        pass
+
     def get_population_evaluations(self) -> List[Evaluation[FitnessType]]:
         """
         Returns the evaluations of the entire current population or set of

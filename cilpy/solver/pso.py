@@ -33,6 +33,8 @@ def _evaluations_differ(fresh: Evaluation, old: Evaluation, tolerance: float) ->
             return True
     return False
 
+BOUND_HANDLING_OPTIONS = ("clamp", "reflect", "none")
+
 
 class PSO(Solver[List[float], float]):
     """
@@ -52,6 +54,8 @@ class PSO(Solver[List[float], float]):
         c2: float,
         constraint_handler: Optional[ConstraintHandler[float]] = None,
         detect_changes: bool = False,
+        max_velocity: Optional[float] = None,
+        bound_handling: str = "clamp",
         **kwargs,
     ):
         """
@@ -59,6 +63,7 @@ class PSO(Solver[List[float], float]):
 
         Args:
             problem: The optimization problem to solve.
+            name: The name of the solver.
             swarm_size: The number of particles in the swarm.
             w: The inertia weight, controlling the influence of the previous
                velocity.
@@ -74,14 +79,33 @@ class PSO(Solver[List[float], float]):
                iteration; when its objective or constraint values have moved,
                the personal bests are re-evaluated (`respond_to_change`).
                Defaults to False.
+            max_velocity: Optional velocity limit as a fraction of each
+               dimension's range. None means no limit.
+            bound_handling: What happens when a particle leaves the bounds.
+               "clamp" puts it on the bound, "reflect" bounces it back and
+               "none" leaves it outside, where it cannot become a personal best.
             **kwargs: Additional keyword arguments (not used in this canonical
                PSO).
+
+        Raises:
+            ValueError: If bound_handling is not a known option or
+               max_velocity is not positive.
         """
         super().__init__(problem, name, constraint_handler=constraint_handler)
+
+        if bound_handling not in BOUND_HANDLING_OPTIONS:
+            raise ValueError(
+                f"bound_handling must be one of {BOUND_HANDLING_OPTIONS}, not {bound_handling!r}")
+
+        if max_velocity is not None and max_velocity <= 0:
+            raise ValueError(f"max_velocity must be positive, not {max_velocity}")
+
         self.swarm_size = swarm_size
         self.w = w
         self.c1 = c1
         self.c2 = c2
+        self.max_velocity = max_velocity
+        self.bound_handling = bound_handling
 
         # Change detection. The sentry is evaluated on the original problem
         # when the PSO solves a CCLS proxy.
@@ -182,22 +206,21 @@ class PSO(Solver[List[float], float]):
                 )
                 inertia_component = self.w * self.velocities[i][d]
 
-                self.velocities[i][d] = (
-                    inertia_component + cognitive_component + social_component
-                )
+                velocity = inertia_component + cognitive_component + social_component
+                self.velocities[i][d] = self._limit_velocity(velocity, d)
 
             # 2. Update Position
             for d in range(self.problem.dimension):
-                self.population[i][d] += self.velocities[i][d]
-                # Clamp position to stay within bounds
-                self.population[i][d] = max(
-                    lower_bounds[d], min(self.population[i][d], upper_bounds[d])
-                )
+                position = self.population[i][d] + self.velocities[i][d]
+                self.population[i][d] = self._handle_bounds(position, lower_bounds[d], upper_bounds[d])
 
             # 3. Evaluate new position
             self.evaluations[i] = self.problem.evaluate(self.population[i])
 
             # 4. Update Personal Best (pbest)
+            if self.bound_handling == "none" and not self._is_inside_bounds(self.population[i]):
+                continue
+
             if self.comparator.is_better(
                 self.evaluations[i], self.pbest_evaluations[i]
             ):
@@ -224,6 +247,83 @@ class PSO(Solver[List[float], float]):
                 best = i
         self.gbest_position = copy.deepcopy(self.pbest_positions[best])
         self.gbest_evaluation = copy.deepcopy(self.pbest_evaluations[best])
+
+    def _limit_velocity(self, velocity: float, d: int) -> float:
+        """Limits a velocity to max_velocity times the range of dimension d.
+
+        Args:
+            velocity: The new velocity.
+            d: The dimension of the velocity.
+
+        Returns:
+            The velocity, limited if max_velocity is set.
+        """
+
+        if self.max_velocity is None:
+            return velocity
+
+        lower_bounds, upper_bounds = self.problem.bounds
+        limit = self.max_velocity * (upper_bounds[d] - lower_bounds[d])
+
+        return max(-limit, min(velocity, limit))
+
+    def _handle_bounds(self, position: float, lower: float, upper: float) -> float:
+        """Applies the bound handling to one coordinate of a position.
+
+        A reflected position that is still outside is clamped.
+
+        Args:
+            position: The new coordinate.
+            lower: The lower bound of the dimension.
+            upper: The upper bound of the dimension.
+
+        Returns:
+            The coordinate after bound handling.
+        """
+
+        if self.bound_handling == "none":
+            return position
+
+        if self.bound_handling == "reflect":
+            
+            if position > upper:
+                position = 2 * upper - position
+
+
+            elif position < lower:
+                position = 2 * lower - position
+
+        # Clamp
+        return max(lower, min(position, upper))
+
+    def _is_inside_bounds(self, position: List[float]) -> bool:
+        """Returns True if every coordinate of the position is inside the bounds."""
+        
+        lower_bounds, upper_bounds = self.problem.bounds
+
+        for d, value in enumerate(position):
+            
+            if value < lower_bounds[d] or value > upper_bounds[d]:
+                return False
+
+        return True
+
+    def refresh_evaluations(self) -> None:
+        """Re-evaluates stored personal-best fitness values under the
+        current state of the problem.
+
+        The global best is then chosen again from the refreshed personal bests,
+        using the solver's comparator (same as `respond_to_change`).
+        """
+        self.respond_to_change()
+
+    def accept_best(self, solution: List[float], evaluation: Evaluation[float]) -> None:
+        """Makes the solution the global best if it is at least as good as the current one."""
+
+        if not self.comparator.is_better(self.gbest_evaluation, evaluation):
+
+            self.gbest_position = copy.deepcopy(solution)
+            self.gbest_evaluation = copy.deepcopy(evaluation)
 
     def get_result(self) -> List[Tuple[List[float], Evaluation[float]]]:
         """Returns the global best solution found by the swarm."""

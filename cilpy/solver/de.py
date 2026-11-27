@@ -116,6 +116,32 @@ class DE(Solver[List[float], float]):
                 self.population[i] = trial_vector
                 self.evaluations[i] = trial_eval
 
+    def refresh_evaluations(self) -> None:
+        """
+        Re-evaluates every individual's stored fitness under the
+        current state of the problem.
+        """
+        for i in range(self.population_size):
+            self.evaluations[i] = self.problem.evaluate(self.population[i])
+
+    def accept_best(self, solution: List[float], evaluation: Evaluation[float]) -> None:
+        """Replaces the worst individual with the solution if it beats the whole population."""
+
+        best_index = 0
+        worst_index = 0
+
+        for i in range(1, self.population_size):
+            
+            if self.comparator.is_better(self.evaluations[i], self.evaluations[best_index]):
+                best_index = i
+                
+            if self.comparator.is_better(self.evaluations[worst_index], self.evaluations[i]):
+                worst_index = i
+
+        if self.comparator.is_better(evaluation, self.evaluations[best_index]):
+            self.population[worst_index] = list(solution)
+            self.evaluations[worst_index] = evaluation
+
     def get_result(self) -> List[Tuple[List[float], Evaluation[float]]]:
         """Returns the best solution found in the current population."""
         best_idx = 0

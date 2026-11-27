@@ -148,6 +148,20 @@ class Quadratic(Problem[List[float], float]):
         """Indicates that the function is not multi-objective."""
         return False
 
+    def get_fitness_bounds(self) -> Tuple[float, float]:
+        """Returns the known theoretical min and max fitness values."""
+        best_fitness = 0.0
+
+        lower_bound = self.bounds[0][0]
+        upper_bound = self.bounds[1][0]
+        limit = max(abs(lower_bound), abs(upper_bound))
+
+        n = self.dimension
+        sum_of_squares = n * (n + 1) * (2 * n + 1) / 6
+        worst_fitness = (limit**2) * sum_of_squares
+
+        return (best_fitness, worst_fitness)
+
 
 class Ackley(Problem[List[float], float]):
     """The Ackley function.
@@ -217,6 +231,538 @@ class Ackley(Problem[List[float], float]):
         """Indicates that the function is not multi-objective."""
         return False
 
+    def get_fitness_bounds(self) -> Tuple[float, float]:
+        """Returns the known theoretical min and max fitness values."""
+
+        best_fitness = 0.0
+        worst_fitness = self.a + math.e
+
+        return (best_fitness, worst_fitness)
+
+
+class Rastrigin(Problem[List[float], float]):
+    """The Rastrigin function.
+
+    A highly multimodal benchmark function with a large number of local
+    minima. Its global minimum is at the
+    origin (0, ..., 0) with a fitness value of 0.
+
+    The function is defined as:
+    f(x) = A*n + Sum(x_i^2 - A*cos(2*pi*x_i)) for i = 1 to n
+    """
+
+    def __init__(self, dimension: int = 2, domain: Tuple[float, float] = (-5.12, 5.12)):
+        """Initializes a Rastrigin function problem instance.
+
+        The standard parameter `A=10` is used.
+
+        Args:
+            dimension: The number of decision variables (dimensions). Defaults
+                to 2.
+            domain: A tuple `(min_val, max_val)` defining the symmetric search
+                space boundary for each dimension. Defaults to (-5.12, 5.12).
+        """
+        lower_bounds = [domain[0]] * dimension
+        upper_bounds = [domain[1]] * dimension
+        super().__init__(
+            dimension=dimension, bounds=(lower_bounds, upper_bounds), name="Rastrigin"
+        )
+        self.A = 10
+
+    def evaluate(self, solution: List[float]) -> Evaluation[float]:
+        """Evaluates the Rastrigin function for a given solution.
+
+        Args:
+            solution (List[float]): A list of floats representing the decision
+                variables of the candidate solution.
+
+        Returns:
+            Evaluation[float]: An Evaluation object containing the fitness
+                (a single float) and no constraint violations.
+        """
+        per_dimension_sum = sum(
+            x**2 - self.A * math.cos(2 * math.pi * x) for x in solution
+        )
+        fitness = self.A * self.dimension + per_dimension_sum
+        return Evaluation(fitness=fitness)
+
+    def is_dynamic(self) -> Tuple[bool, bool]:
+        """Indicates that the Rastrigin function is not dynamic.
+
+        Returns:
+            Tuple[bool, bool]: A tuple `(False, False)` as the function is
+                static.
+        """
+        return (False, False)
+
+    def is_multi_objective(self) -> bool:
+        """Indicates that the function is not multi-objective."""
+        return False
+
+    def get_fitness_bounds(self) -> Tuple[float, float]:
+        """Returns the known theoretical min and max fitness values.
+
+        Returns:
+            A tuple containing (global_minimum_fitness, global_maximum_fitness).
+        """
+        best_fitness = 0.0
+
+        lower_bound = self.bounds[0][0]
+        upper_bound = self.bounds[1][0]
+        limit = max(abs(lower_bound), abs(upper_bound))
+
+        worst_per_dimension = limit**2 + self.A
+        worst_fitness = self.dimension * worst_per_dimension
+
+        return (best_fitness, worst_fitness)
+
+
+class Rosenbrock(Problem[List[float], float]):
+    """The generalized Rosenbrock function.
+
+    A widely used multimodal, non-separable benchmark function.
+    The global minimum is at (1, ..., 1) with a fitness value of 0.
+
+    The function is defined as:
+    f(x) = Sum_{i=1}^{n-1} [100*(x_{i+1} - x_i^2)^2 + (x_i - 1)^2]
+    """
+
+    def __init__(self, dimension: int = 2, domain: Tuple[float, float] = (-30, 30)):
+        """Initializes a generalized Rosenbrock function problem instance.
+
+        Args:
+            dimension: The number of decision variables (dimensions). Defaults
+                to 2. At least two are needed for this function.
+            domain: A tuple `(min_val, max_val)` defining the symmetric search
+                space boundary for each dimension. Defaults to (-30, 30).
+        """
+        lower_bounds = [domain[0]] * dimension
+        upper_bounds = [domain[1]] * dimension
+        super().__init__(
+            dimension=dimension, bounds=(lower_bounds, upper_bounds), name="Rosenbrock"
+        )
+
+    def evaluate(self, solution: List[float]) -> Evaluation[float]:
+        """Evaluates the generalized Rosenbrock function for a given solution.
+
+        Args:
+            solution (List[float]): A list of floats representing the decision
+                variables of the candidate solution.
+
+        Returns:
+            Evaluation[float]: An Evaluation object containing the fitness
+                (a single float) and no constraint violations.
+        """
+        fitness = 0.0
+
+        for i in range(len(solution) - 1):
+            current_value = solution[i]
+            next_value = solution[i + 1]
+
+            valley_term = 100.0 * (next_value - current_value**2) ** 2
+
+            offset_term = (current_value - 1) ** 2
+
+            fitness += valley_term + offset_term
+
+        return Evaluation(fitness=fitness)
+
+    def is_dynamic(self) -> Tuple[bool, bool]:
+        """Indicates that the Rosenbrock function is not dynamic.
+
+        Returns:
+            Tuple[bool, bool]: A tuple `(False, False)` as the function is
+                static.
+        """
+        return (False, False)
+
+    def is_multi_objective(self) -> bool:
+        """Indicates that the function is not multi-objective."""
+        return False
+
+    def get_fitness_bounds(self) -> Tuple[float, float]:
+        """Returns the known theoretical min and max fitness values.
+
+        Returns:
+            A tuple containing (global_minimum_fitness, global_maximum_fitness).
+        """
+
+        best_fitness = 0.0
+
+        lower_bound = self.bounds[0][0]
+        upper_bound = self.bounds[1][0]
+        limit = max(abs(lower_bound), abs(upper_bound))
+
+        worst_valley_term = 100.0 * (limit + limit**2) ** 2
+        worst_offset_term = (limit + 1) ** 2
+
+        number_of_terms = max(0, self.dimension - 1)
+        worst_fitness = number_of_terms * (worst_valley_term + worst_offset_term)
+
+        return (best_fitness, worst_fitness)
+
+
+class Griewank(Problem[List[float], float]):
+    """The Griewank function.
+
+    A multimodal, non-separable benchmark function with many regularly spaced
+    local minima. The global minimum is at the origin (0, ..., 0) with a
+    fitness value of 0.
+
+    The function is defined as:
+    f(x) = Sum(x_i^2) / 4000 - Prod(cos(x_i / sqrt(i))) + 1 for i = 1 to n
+    """
+
+    def __init__(self, dimension: int = 2, domain: Tuple[float, float] = (-600, 600)):
+        """Initializes a Griewank function problem instance.
+
+        Args:
+            dimension: The number of decision variables (dimensions). Defaults
+                to 2.
+            domain: A tuple `(min_val, max_val)` defining the symmetric search
+                space boundary for each dimension. Defaults to (-600, 600).
+        """
+        lower_bounds = [domain[0]] * dimension
+        upper_bounds = [domain[1]] * dimension
+        super().__init__(
+            dimension=dimension, bounds=(lower_bounds, upper_bounds), name="Griewank"
+        )
+
+    def evaluate(self, solution: List[float]) -> Evaluation[float]:
+        """Evaluates the Griewank function for a given solution.
+
+        Args:
+            solution: A list of floats representing the decision
+                variables of the candidate solution.
+
+        Returns:
+            Evaluation: An Evaluation object containing the fitness
+        """
+
+        sum_of_squares = 0.0
+        product_of_cosines = 1.0
+
+        for i, x in enumerate(solution, start=1):
+            sum_of_squares += x**2
+            product_of_cosines *= math.cos(x / math.sqrt(i))
+
+        fitness = sum_of_squares / 4000 - product_of_cosines + 1
+        return Evaluation(fitness=fitness)
+
+    def is_dynamic(self) -> Tuple[bool, bool]:
+        """Indicates that the Griewank function is not dynamic.
+
+        Returns:
+            Tuple[bool, bool]: A tuple `(False, False)` as the function is
+                static.
+        """
+        
+        return (False, False)
+
+    def is_multi_objective(self) -> bool:
+        """Indicates that the function is not multi-objective."""
+        return False
+
+    def get_fitness_bounds(self) -> Tuple[float, float]:
+        """Returns the known theoretical min and max fitness values."""
+
+        best_fitness = 0.0
+
+        lower_bound = self.bounds[0][0]
+        upper_bound = self.bounds[1][0]
+
+        limit = max(abs(lower_bound), abs(upper_bound))
+
+        worst_fitness = self.dimension * limit**2 / 4000 + 2
+
+        return (best_fitness, worst_fitness)
+
+
+class Elliptic(Problem[List[float], float]):
+    """The high-conditioned Elliptic function.
+
+    A unimodal and separable benchmark function.
+
+    The function is defined as:
+    f(x) = Sum((10^6)^((i - 1) / (n - 1))*x_i^2) for i = 1 to n
+    """
+
+    def __init__(self, dimension: int = 2, domain: Tuple[float, float] = (-100, 100)):
+        """Initializes an Elliptic function problem instance"""
+        lower_bounds = [domain[0]] * dimension
+        upper_bounds = [domain[1]] * dimension
+        super().__init__(
+            dimension=dimension, bounds=(lower_bounds, upper_bounds), name="Elliptic"
+        )
+
+    def evaluate(self, solution: List[float]) -> Evaluation[float]:
+        """Evaluates the Elliptic function for a given solution."""
+        
+        last_index = max(1, len(solution) - 1)
+        fitness = 0.0
+
+        for i, x in enumerate(solution):
+            weight = (10**6) ** (i / last_index)
+            fitness += weight * x**2
+
+        return Evaluation(fitness=fitness)
+
+    def is_dynamic(self) -> Tuple[bool, bool]:
+        """Indicates that the Griewank function is not dynamic"""
+        return (False, False)
+
+    def is_multi_objective(self) -> bool:
+        """Indicates that the function is not multi-objective."""
+        return False
+
+    def get_fitness_bounds(self) -> Tuple[float, float]:
+        """Returns the known theoretical min and max fitness values.
+
+        The maximum is reached at any corner of the search space.
+        """
+        best_fitness = 0.0
+
+        lower_bound = self.bounds[0][0]
+        upper_bound = self.bounds[1][0]
+        limit = max(abs(lower_bound), abs(upper_bound))
+
+        last_index = max(1, self.dimension - 1)
+        total_weight = 0.0
+        for i in range(self.dimension):
+            total_weight += (10**6) ** (i / last_index)
+
+        worst_fitness = total_weight * limit**2
+
+        return (best_fitness, worst_fitness)
+
+
+class Schwefel2_22(Problem[List[float], float]):
+    """The Schwefel 2.22 function.
+
+    A unimodal and non-separable benchmark function. The global minimum is at the
+    origin with a fitness value of 0.
+
+    The function is defined as:
+    f(x) =  Sum(|x_i|) + Prod(|x_i|) for i = 1 to n
+    """
+
+    def __init__(self, dimension: int = 2, domain: Tuple[float, float] = (-10, 10)):
+        """Initializes a Schwefel 2.22 function problem instance.
+        """
+        lower_bounds = [domain[0]] * dimension
+        upper_bounds = [domain[1]] * dimension
+
+        super().__init__(
+            dimension=dimension, bounds=(lower_bounds, upper_bounds), name="Schwefel2_22")
+
+    def evaluate(self, solution: List[float]) -> Evaluation[float]:
+        """Evaluates the Schwefel 2.22 function for a given solution."""
+
+        sum_of_absolutes = 0.0
+        product_of_absolutes = 1.0
+
+        for x in solution:
+            sum_of_absolutes += abs(x)
+            product_of_absolutes *= abs(x)
+
+        fitness = sum_of_absolutes + product_of_absolutes
+        return Evaluation(fitness=fitness)
+
+    def is_dynamic(self) -> Tuple[bool, bool]:
+        """Indicates that the function is not dynamic."""
+        return (False, False)
+
+    def is_multi_objective(self) -> bool:
+        """Indicates that the function is not multi-objective."""
+        return False
+
+    def get_fitness_bounds(self) -> Tuple[float, float]:
+        """Returns the known theoretical min and max fitness values"""
+        best_fitness = 0.0
+
+        lower_bound = self.bounds[0][0]
+        upper_bound = self.bounds[1][0]
+        limit = float(max(abs(lower_bound), abs(upper_bound)))
+
+        try:
+            worst_product = limit**self.dimension
+        except OverflowError:
+            worst_product = float("inf")
+
+        worst_fitness = self.dimension * limit + worst_product
+
+        return (best_fitness, worst_fitness)
+
+
+class Schwefel2_26(Problem[List[float], float]):
+    """The Schwefel 2.26 function"""
+
+    def __init__(self, dimension: int = 2, domain: Tuple[float, float] = (-500, 500)):
+        """Initializes a Schwefel 2.26 function problem instance.
+
+        Args:
+            dimension: The number of decision variables (dimensions). Defaults
+                to 2.
+            domain: A tuple `(min_val, max_val)` defining the symmetric search
+                space boundary for each dimension. Defaults to (-500, 500).
+        """
+        lower_bounds = [domain[0]] * dimension
+        upper_bounds = [domain[1]] * dimension
+
+        super().__init__(
+            dimension=dimension, bounds=(lower_bounds, upper_bounds), name="Schwefel2_26")
+
+    def evaluate(self, solution: List[float]) -> Evaluation[float]:
+        """Evaluates the Schwefel 2.26 function for a given solutoin."""
+        total = 0.0
+
+        for x in solution:
+            total += x * math.sin(math.sqrt(abs(x)))
+
+        fitness = 418.9829 * len(solution) - total
+
+        return Evaluation(fitness=fitness)
+
+    def is_dynamic(self) -> Tuple[bool, bool]:
+        """Indicates that the function is not dynamic."""
+        return (False, False)
+
+    def is_multi_objective(self) -> bool:
+        """Indicates that the function is not multi-objective."""
+        return False
+
+    def get_fitness_bounds(self) -> Tuple[float, float]:
+        """Returns the known theoretical min and max fitness values"""
+        best_fitness = 0.0
+
+        lower_bound = self.bounds[0][0]
+        upper_bound = self.bounds[1][0]
+
+        number_of_points = 100001
+        step = (upper_bound - lower_bound) / (number_of_points - 1)
+        worst_per_dimension = 0.0
+
+        for i in range(number_of_points):
+            x = lower_bound + i * step
+            value = 418.9829 - x * math.sin(math.sqrt(abs(x)))
+            worst_per_dimension = max(worst_per_dimension, value)
+
+        worst_fitness = self.dimension * worst_per_dimension
+
+        return (best_fitness, worst_fitness)
+
+
+class Schwefel2_21(Problem[List[float], float]):
+    """The Schwefel 2.21 function
+
+    A unimodal and non-separable benchmark function.
+
+    The function is defined as:
+    f(x) = Max(|x_i|) for i = 1 to n
+    """
+
+    def __init__(self, dimension: int = 2, domain: Tuple[float, float] = (-100, 100)):
+        """Initializes a Schwefel 2.21 function problem instance.
+
+        Args:
+            dimension: The number of decision variables (dimensions). Defaults
+                to 2.
+            domain: A tuple `(min_val, max_val)` defining the symmetric search
+                space boundary for each dimension. Defaults to (-100, 100).
+        """
+        lower_bounds = [domain[0]] * dimension
+        upper_bounds = [domain[1]] * dimension
+
+        super().__init__(
+            dimension=dimension, bounds=(lower_bounds, upper_bounds), name="Schwefel2_21")
+
+    def evaluate(self, solution: List[float]) -> Evaluation[float]:
+        """Evaluates the Schwefel 2.21 function for a given solution."""
+        largest_absolute = 0.0
+
+        for x in solution:
+            largest_absolute = max(largest_absolute, abs(x))
+
+        fitness = largest_absolute
+        return Evaluation(fitness=fitness)
+
+    def is_dynamic(self) -> Tuple[bool, bool]:
+        """Indicates that the function is not dynamic."""
+        return (False, False)
+
+    def is_multi_objective(self) -> bool:
+        """Indicates that the function is not multi-objective."""
+        return False
+
+    def get_fitness_bounds(self) -> Tuple[float, float]:
+        """Returns the known theoretical min and max fitness values"""
+        best_fitness = 0.0
+
+        lower_bound = self.bounds[0][0]
+        upper_bound = self.bounds[1][0]
+        worst_fitness = float(max(abs(lower_bound), abs(upper_bound)))
+
+        return (best_fitness, worst_fitness)
+
+class Weierstrass(Problem[List[float], float]):
+    """The Weierstrass function. Multimodal and separable benchmark function"""
+
+    def __init__(self, dimension: int = 2, domain: Tuple[float, float] = (-0.5, 0.5)):
+        """Initializes a Weierstrass function problem instance.
+
+        Args:
+            dimension: The number of decision variables (dimensions). Defaults
+                to 2.
+            domain: A tuple `(min_val, max_val)` defining the symmetric search
+                space boundary for each dimension. Defaults to (-0.5, 0.5).
+        """
+        lower_bounds = [domain[0]] * dimension
+        upper_bounds = [domain[1]] * dimension
+
+        super().__init__(dimension=dimension,
+                         bounds=(lower_bounds, upper_bounds), name="Weierstrass")
+
+        self.a = 0.5
+        self.b = 3
+        self.k_max = 20
+
+    def evaluate(self, solution: List[float]) -> Evaluation[float]:
+        """Evaluates the Weierstrass function for a given solution."""
+        total = 0.0
+
+        for x in solution:
+            for k in range(self.k_max + 1):
+                total += self.a**k * math.cos(2 * math.pi * self.b**k * (x + 0.5))
+
+        # Subtracted so that the minimum is exactly 0
+        offset = 0.0
+        for k in range(self.k_max + 1):
+            offset += self.a**k * math.cos(math.pi * self.b**k)
+
+        fitness = total - len(solution)*offset
+
+        return Evaluation(fitness=fitness)
+
+    def is_dynamic(self) -> Tuple[bool, bool]:
+        """Indicates that the function is not dynamic."""
+        return (False, False)
+
+    def is_multi_objective(self) -> bool:
+        """Indicates that the function is not multi-objective."""
+        return False
+
+    def get_fitness_bounds(self) -> Tuple[float, float]:
+        """Returns the known theoretical min and max fitness values"""
+        best_fitness = 0.0
+
+        sum_of_weights = 0.0
+        for k in range(self.k_max + 1):
+            sum_of_weights += self.a**k
+
+        worst_per_dimension = 2 * sum_of_weights
+        worst_fitness = self.dimension * worst_per_dimension
+
+        return (best_fitness, worst_fitness)
 
 if __name__ == "__main__":
     my_sphere = Sphere(2, (-5.12, 5.12))
@@ -227,3 +773,24 @@ if __name__ == "__main__":
 
     my_ackley = Ackley(2, (-5.12, 5.12))
     print(my_ackley.evaluate([0, 0]))
+
+    my_rastrigin = Rastrigin(2, (-5.12, 5.12))
+    print(my_rastrigin.evaluate([0, 0]))
+
+    my_rosenbrock = Rosenbrock(2, (-30, 30))
+    print(my_rosenbrock.evaluate([1, 1]))
+
+    my_elliptic = Elliptic(2, (-100, 100))
+    print(my_elliptic.evaluate([0, 0]))
+
+    my_schwefel = Schwefel2_22(2, (-10, 10))
+    print(my_schwefel.evaluate([0, 0]))
+
+    my_schwefel_2_26 = Schwefel2_26(2, (-500, 500))
+    print(my_schwefel_2_26.evaluate([420.9687, 420.9687]))
+
+    my_schwefel_2_21 = Schwefel2_21(2, (-100, 100))
+    print(my_schwefel_2_21.evaluate([0, 0]))
+
+    my_weierstrass = Weierstrass(2, (-0.5, 0.5))
+    print(my_weierstrass.evaluate([0, 0]))

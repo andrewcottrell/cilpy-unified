@@ -1,0 +1,273 @@
+# cilpy/solver/decomposition/trigger.py
+"""Triggers that decide when a cooperative solver changes its groups.
+
+Also holds the helpers that space the splits or merges of DCPSO and
+MCPSO evenly over the budget.
+"""
+
+import math
+from typing import Optional
+from abc import ABC, abstractmethod
+
+class RegroupTrigger(ABC):
+    """Abstract base for regroup triggers.
+
+    A regroup trigger chooses when the coordinator should replace the
+    current grouping with a new one.
+    """
+
+    @abstractmethod
+    def should_trigger(self, state: dict) -> bool:
+        """Decides whether a regroup event should happen now.
+
+        Args:
+            state: The coordinator state dictionary. It holds the keys
+                iteration, best_fitness and evaluations.
+
+        Returns:
+            True when the coordinator should regroup and False otherwise.
+        """
+
+    def on_triggered(self, state: dict) -> None:
+        """A hook called immediately after a regroup happens.
+
+        Triggers that keep internal counters override this to update them.
+
+        Args:
+            state: The same state dictionary passed to should_trigger.
+        """
+
+    def reset(self) -> None:
+        """Clears the state carried over from a previous run."""
+
+
+class FixedIntervalTrigger(RegroupTrigger):
+    """Triggers every fixed number of iterations. Never fires at iteration zero."""
+
+    def __init__(self, interval: int) -> None:
+        """
+        Initializes the FixedIntervalTrigger.
+
+        Args:
+            interval: Number of iterations between regroup events.
+                This must be at least 1.
+
+        Raises:
+            ValueError: If interval is less than 1.
+        """
+
+        if interval < 1:
+            raise ValueError(f"interval must be at least 1, but got {interval}")
+
+        self._interval = interval
+
+    def should_trigger(self, state: dict) -> bool:
+        """Returns True on every interval-th iteration."""
+
+        iteration = state["iteration"]
+
+        has_started = iteration > 0
+        is_interval_boundary = iteration % self._interval == 0
+
+        return has_started and is_interval_boundary
+
+
+class EvaluationIntervalTrigger(RegroupTrigger):
+    """Triggers every fixed number of fitness evaluations.
+
+    An iteration can use many evaluations, so the trigger fires at the end
+    of the first iteration that reaches the next threshold.
+    """
+
+    def __init__(self, interval: int) -> None:
+        """Initializes the EvaluationIntervalTrigger.
+
+        Args:
+            interval: Number of fitness evaluations between regroup events.
+                This must be at least 1.
+
+        Raises:
+            ValueError: If interval is less than 1.
+        """
+
+        if interval < 1:
+            raise ValueError(f"interval must be at least 1, but got {interval}")
+
+        self._interval = interval
+        self._next_threshold = interval
+
+
+    def should_trigger(self, state: dict) -> bool:
+        """Returns True once the evaluations used reach the next threshold."""
+
+        return state["evaluations"] >= self._next_threshold
+
+    def on_triggered(self, state: dict) -> None:
+        """Moves the threshold one interval further."""
+
+
+        self._next_threshold += self._interval
+
+    def reset(self) -> None:
+        """Sets the threshold back to the first interval."""
+        self._next_threshold = self._interval
+
+
+class StagnationTrigger(RegroupTrigger):
+    """Triggers when the search stops making meaningful progress."""
+
+    def __init__(self, patience: int, tolerance: float = 1e-4) -> None:
+        """
+        Initializes the StagnationTrigger.
+
+        Args:
+            patience: Number of iterations without a meaningful
+                improvement that are allowed before a regroup is triggered.
+            tolerance: The improvement that is seen as meaningful, as a
+                fraction of the best fitness so far. For example 1e-4 means
+                the fitness must improve by more than 0.01 percent.
+
+        Raises:
+            ValueError: If patience is less than 1 or tolerance is negative.
+        """
+
+        if patience < 1:
+            raise ValueError(f"patience must be at least 1, but got {patience}")
+
+        if tolerance < 0:
+            raise ValueError(f"tolerance must not be negative, but got {tolerance}")
+
+
+        self._patience = patience
+        self._tolerance = tolerance
+
+        self._best_fitness_so_far = None
+        self._iterations_without_improvement = 0
+
+    def _is_meaningful_improvement(self, current_best_fitness: float) -> bool:
+        """
+        Decides whether the current fitness improved enough to be meaningful.
+
+        Args:
+            current_best_fitness: The coordinator's best assembled fitness so far.
+
+        Returns:
+            True if the improvement is at least the required fraction.
+        """
+    
+        reference_magnitude = abs(self._best_fitness_so_far)
+
+        if not math.isfinite(reference_magnitude):
+            return math.isfinite(current_best_fitness)
+
+        improvement = self._best_fitness_so_far - current_best_fitness
+        required_improvement = self._tolerance * reference_magnitude
+
+        return improvement > required_improvement
+
+
+    def should_trigger(self, state: dict) -> bool:
+        """Returns True after patience iterations in a row without a meaningful improvement."""
+
+        current_best_fitness = state["best_fitness"]
+
+        if self._best_fitness_so_far is None:
+            self._best_fitness_so_far = current_best_fitness
+            self._iterations_without_improvement = 0
+            return False
+
+        if self._is_meaningful_improvement(current_best_fitness):
+
+            self._best_fitness_so_far = current_best_fitness
+            self._iterations_without_improvement = 0
+
+        else:
+            self._iterations_without_improvement += 1
+
+        return self._iterations_without_improvement >= self._patience
+
+    def on_triggered(self, state: dict) -> None:
+        """Resets the patience after a regroup has been performed.
+
+        Args:
+            state: The same state dictionary.
+        """
+        self._iterations_without_improvement = 0
+
+    def reset(self) -> None:
+        """Forgets the best fitness and the patience count of the previous run."""
+        self._best_fitness_so_far = None
+        self._iterations_without_improvement = 0
+
+
+class NeverTrigger(RegroupTrigger):
+    """This never triggers. Used by solvers with a static grouping."""
+
+    def should_trigger(self, state: dict) -> bool:
+        """Always returns False."""
+        return False
+
+
+def restructure_interval(total_budget: int, dimension: int, factor: int) -> int:
+    """Calculates how much of the budget should be between regroup events.
+
+    Going from one group to one group per dimension (or back) takes
+    log(dimension) / log(factor) restructures, which gives one more phase
+    than restructures. The budget is shared equally between the phases.
+
+    Args:
+        total_budget: The total budget of the run in iterations or in
+            fitness evaluations.
+        dimension: Total number of decision variables.
+        factor: Amount of parts a group splits into.
+
+    Returns:
+        The interval between regroup events in the same unit as total_budget,
+        rounded down and at least 1.
+
+    Raises:
+        ValueError: if total_budget or dimension is below 1 or factor is below 2.
+    """
+
+    if total_budget < 1:
+        raise ValueError(f"total_budget must be at least 1 but is {total_budget}")
+
+    if dimension < 1:
+        raise ValueError(f"dimension must be at least 1 but is {dimension}")
+
+    if factor < 2:
+        raise ValueError(f"factor must be at least 2 but is {factor}")
+
+    number_of_restructures = math.log(dimension) / math.log(factor)
+    number_of_phases = 1 + number_of_restructures
+
+    interval = math.floor(round(total_budget / number_of_phases, 6))
+
+    return max(1, interval)
+
+
+def restructure_trigger(dimension: int, factor: int, max_iterations: Optional[int] = None,
+                        max_evaluations: Optional[int] = None) -> RegroupTrigger:
+    """Creates a trigger that spaces the restructures evenly over the budget.
+
+    Args:
+        dimension: Number of decision variables.
+        factor: Number of parts a group splits into, or number of groups
+            merged into one.
+        max_iterations: The iteration budget of the run.
+        max_evaluations: The fitness evaluation budget of the run. Used
+            instead of max_iterations when both are given.
+
+    Returns:
+        An EvaluationIntervalTrigger for an evaluation budget, otherwise a
+        FixedIntervalTrigger for an iteration budget.
+    """
+
+    if max_evaluations is not None:
+        
+        interval = restructure_interval(max_evaluations, dimension, factor)
+        return EvaluationIntervalTrigger(interval=interval)
+
+    interval = restructure_interval(max_iterations, dimension, factor)
+
+    return FixedIntervalTrigger(interval=interval)

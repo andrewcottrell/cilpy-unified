@@ -2,6 +2,7 @@
 **/.mypy_cache
 **/.pytest_cache
 **/*.jpeg
+**/*.out.*
 **/*.tmp.*
 cilpy.egg-info
 clean_pc.sh
@@ -12,6 +13,7 @@ dist/
 site/
 
 out/
+random/
 *.log
 
 # Local environments and OS files

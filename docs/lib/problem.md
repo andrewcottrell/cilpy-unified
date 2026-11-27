@@ -4,6 +4,10 @@
 
 ::: cilpy.problem.unconstrained
 
+## Large-Scale (CEC 2010)
+
+::: cilpy.problem.cec2010
+
 ## Constrained Single-Objective
 
 ::: cilpy.problem.constrained
@@ -21,3 +25,7 @@
 ::: cilpy.problem.mpb
 
 ::: cilpy.problem.cmpb
+
+## Utilities
+
+::: cilpy.problem.counting

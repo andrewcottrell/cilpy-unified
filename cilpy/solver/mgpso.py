@@ -613,7 +613,8 @@ class MGPSO(Solver[List[float], List[float]]):
 
     def _archive_sentries_changed(self, tolerance: float) -> bool:
         """Re-evaluates archive members and compares them with their stored
-        evaluations. Falls back to the fixed sentry if the archive is empty."""
+        evaluations. Falls back to the fixed sentry if the archive is empty.
+        On a detected change the fixed sentry is re-evaluated as well."""
         n = len(self._archive)
         if n == 0:
             return self._fixed_sentry_changed(tolerance)
@@ -628,6 +629,7 @@ class MGPSO(Solver[List[float], List[float]]):
             stored = self._archive.evaluations[i]
             fresh = self.problem.evaluate(list(position))
             if self._evaluations_differ(fresh, stored, tolerance):
+                self._sentry_eval = self.problem.evaluate(list(self._sentry_x))
                 return True
         return False
 

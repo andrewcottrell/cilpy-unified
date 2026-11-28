@@ -10,6 +10,11 @@ change frequency and n_t the change severity.
 - DTNK5: dynamic objectives, static constraints (DOSC).
 - DTNK6, DTNK4: dynamic objectives and constraints (DODC).
 
+The DTNK problems take a `dimension` (default 2). Variables x3..xn scale
+the first two by g = 1 + sum_{i>=3} (xi - pi/2)^2, and the 2-D problem is
+evaluated at (g x1, g x2). The Pareto set has xi = pi/2 for i >= 3, so the
+front is that of the 2-D problem.
+
 true_pareto_front() returns the front of the current environment.
 """
 
@@ -45,6 +50,17 @@ class _DynamicMOBase(Problem[List[float], List[float]]):
     def begin_iteration(self) -> None:
         """Advances the iteration counter (called by the ExperimentRunner)."""
         self._tau += 1
+
+    @property
+    def environment(self) -> int:
+        """Current environment index k = floor(tau / tau_t)."""
+        return self._tau // self.tau_t
+
+    def set_environment(self, k: int) -> None:
+        """Sets the current environment index k (t = k / n_t)."""
+        if k < 0:
+            raise ValueError(f"k must be non-negative, got {k}")
+        self._tau = k * self.tau_t
 
     def reset_time(self) -> None:
         """Resets time to zero (call between independent runs)."""
@@ -128,6 +144,21 @@ class FDA3(_DynamicMOBase):
         return np.column_stack([f1, f2])
 
 
+def _dtnk_bounds(dimension: int):
+    """Bounds [0, pi]^n of a DTNK problem."""
+    if dimension < 2:
+        raise ValueError(f"dimension must be at least 2, got {dimension}")
+    return ([0.0] * dimension, [math.pi] * dimension)
+
+
+def _dtnk_position(solution) -> Tuple[float, float]:
+    """(g x1, g x2) with g = 1 + sum_{i>=3} (xi - pi/2)^2."""
+    g = 1.0
+    for x in solution[2:]:
+        g += (x - math.pi / 2) ** 2
+    return solution[0] * g, solution[1] * g
+
+
 class _SampledDynamicFrontMixin:
     """Grid-sampled front of the current environment, cached by t."""
 
@@ -180,16 +211,16 @@ class DTNK(_SampledDynamicFrontMixin, _DynamicMOBase):
     which moves with r(t).
     """
 
-    def __init__(self, tau_t: int = 10, n_t: int = 10):
+    def __init__(self, tau_t: int = 10, n_t: int = 10, dimension: int = 2):
         super().__init__(
-            2, ([0.0, 0.0], [math.pi, math.pi]), "DTNK", tau_t, n_t
+            dimension, _dtnk_bounds(dimension), "DTNK", tau_t, n_t
         )
 
     def _r(self) -> float:
         return 1.0 + 0.2 * math.sin(0.5 * math.pi * self.t)
 
     def evaluate(self, solution: List[float]) -> Evaluation[List[float]]:
-        x1, x2 = solution
+        x1, x2 = _dtnk_position(solution)
         angle = math.atan2(x1, x2)
         g1 = -(x1**2 + x2**2 - self._r() - 0.1 * math.cos(16.0 * angle))
         g2 = (x1 - 0.5) ** 2 + (x2 - 0.5) ** 2 - 0.5
@@ -230,16 +261,16 @@ class DTNK5(_SampledDynamicFrontMixin, _DynamicMOBase):
     Pareto-optimal.
     """
 
-    def __init__(self, tau_t: int = 10, n_t: int = 10):
+    def __init__(self, tau_t: int = 10, n_t: int = 10, dimension: int = 2):
         super().__init__(
-            2, ([0.0, 0.0], [math.pi, math.pi]), "DTNK5", tau_t, n_t
+            dimension, _dtnk_bounds(dimension), "DTNK5", tau_t, n_t
         )
 
     def _alpha(self) -> float:
         return (math.pi / 8) * math.sin(0.5 * math.pi * self.t)
 
     def evaluate(self, solution: List[float]) -> Evaluation[List[float]]:
-        x1, x2 = solution
+        x1, x2 = _dtnk_position(solution)
         f1, f2 = _rotate(x1, x2, self._alpha())
         angle = math.atan2(x1, x2)
         g1 = -(x1**2 + x2**2 - 1.0 - 0.1 * math.cos(16.0 * angle))
@@ -276,9 +307,9 @@ class DTNK6(_SampledDynamicFrontMixin, _DynamicMOBase):
     two changes are out of phase.
     """
 
-    def __init__(self, tau_t: int = 10, n_t: int = 10):
+    def __init__(self, tau_t: int = 10, n_t: int = 10, dimension: int = 2):
         super().__init__(
-            2, ([0.0, 0.0], [math.pi, math.pi]), "DTNK6", tau_t, n_t
+            dimension, _dtnk_bounds(dimension), "DTNK6", tau_t, n_t
         )
 
     def _r(self) -> float:
@@ -288,7 +319,7 @@ class DTNK6(_SampledDynamicFrontMixin, _DynamicMOBase):
         return (math.pi / 8) * math.cos(0.5 * math.pi * self.t)
 
     def evaluate(self, solution: List[float]) -> Evaluation[List[float]]:
-        x1, x2 = solution
+        x1, x2 = _dtnk_position(solution)
         f1, f2 = _rotate(x1, x2, self._alpha())
         angle = math.atan2(x1, x2)
         g1 = -(x1**2 + x2**2 - self._r() - 0.1 * math.cos(16.0 * angle))
@@ -330,9 +361,9 @@ class DTNK4(_DynamicMOBase):
     _ORBIT_CENTRE = (math.pi / 2, math.pi / 2)
     _K = 20
 
-    def __init__(self, tau_t: int = 10, n_t: int = 10):
+    def __init__(self, tau_t: int = 10, n_t: int = 10, dimension: int = 2):
         super().__init__(
-            2, ([0.0, 0.0], [math.pi, math.pi]), "DTNK4", tau_t, n_t
+            dimension, _dtnk_bounds(dimension), "DTNK4", tau_t, n_t
         )
         self._front_cache = {}
 
@@ -362,7 +393,7 @@ class DTNK4(_DynamicMOBase):
         return (math.pi / 8) * math.sin(self._phase())
 
     def evaluate(self, solution: List[float]) -> Evaluation[List[float]]:
-        x1, x2 = solution
+        x1, x2 = _dtnk_position(solution)
         s = self._SCALE
         cx, cy = self._centre()
         phi = self._scallop_phase()

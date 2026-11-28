@@ -100,6 +100,9 @@ class _LagrangianMinProblem(Problem):
         self.penalty_rho = penalty_rho
         self.penalty_rho_equality = penalty_rho_equality if penalty_rho_equality is not None else penalty_rho
 
+        # "clamped": mu max(0, g) + lambda |h|; "signed": mu g + lambda h.
+        self.penalty_sign = "clamped"
+
         # One (mu, lambda) pair per objective. None until the first step; every
         # objective then uses the initial multipliers above.
         self.objective_multipliers = None
@@ -133,9 +136,14 @@ class _LagrangianMinProblem(Problem):
         self.objective_multipliers = multipliers
 
     def _penalty(self, gx, hx, mu, la) -> float:
-        """Clamped penalty for one multiplier vector, plus the fixed rho terms."""
-        penalty = sum(m * max(0.0, g) for m, g in zip(mu, gx))
-        penalty += sum(l * abs(h) for l, h in zip(la, hx))
+        """Penalty for one multiplier vector (clamped or signed, see
+        `penalty_sign`), plus the fixed rho terms."""
+        if self.penalty_sign == "signed":
+            penalty = sum(m * g for m, g in zip(mu, gx))
+            penalty += sum(l * h for l, h in zip(la, hx))
+        else:
+            penalty = sum(m * max(0.0, g) for m, g in zip(mu, gx))
+            penalty += sum(l * abs(h) for l, h in zip(la, hx))
         if self.penalty_rho > 0.0 and gx:
             penalty += self.penalty_rho * sum(max(0.0, g) for g in gx)
         if self.penalty_rho_equality > 0.0 and hx:
@@ -501,8 +509,20 @@ class CoevolutionaryLagrangianSolver(Solver):
                 cached by position and reused when only the multipliers
                 change. Defaults to False.
             multiplier_mode: "per_objective" (default): one multiplier solver
-                per objective on a multi-objective problem, scored with the
-                sampled dual. Ignored on single-objective problems.
+                per objective on a multi-objective problem. "shared": one
+                multiplier solver for all objectives, scored against the
+                anchor solution (see `_select_multiplier_anchor`). Ignored on
+                single-objective problems.
+            dual_scoring: How the per-objective multiplier solvers are
+                scored. "sampled" (default): the sampled dual over the
+                reference set R_m. "anchor": the same function over the
+                anchor solution only.
+            penalty_sign: "clamped" (default): the objective solver is
+                penalised with mu max(0, g) + lambda |h|. "signed": with
+                mu g + lambda h. Multi-objective problems only.
+            rescore: If True (default), the objective solver re-scores its
+                archive and personal bests when the multipliers change.
+                Multi-objective problems only.
             multiplier_immigrants: Share of each per-objective multiplier
                 swarm moved to random positions every iteration. Defaults to 0.
             multiplier_steps: Steps of each per-objective multiplier swarm per
@@ -553,19 +573,37 @@ class CoevolutionaryLagrangianSolver(Solver):
         )
 
         self.multiplier_mode = str(kwargs.get("multiplier_mode", "per_objective"))
-        if self.multiplier_mode != "per_objective":
+        if self.multiplier_mode not in ("per_objective", "shared"):
             raise ValueError(
-                f"multiplier_mode must be 'per_objective', "
+                f"multiplier_mode must be 'per_objective' or 'shared', "
                 f"got '{self.multiplier_mode}'."
             )
+        self.dual_scoring = str(kwargs.get("dual_scoring", "sampled"))
+        if self.dual_scoring not in ("sampled", "anchor"):
+            raise ValueError(
+                f"dual_scoring must be 'sampled' or 'anchor', "
+                f"got '{self.dual_scoring}'."
+            )
+        penalty_sign = str(kwargs.get("penalty_sign", "clamped"))
+        if penalty_sign not in ("clamped", "signed"):
+            raise ValueError(
+                f"penalty_sign must be 'clamped' or 'signed', "
+                f"got '{penalty_sign}'."
+            )
+        self.min_problem.penalty_sign = penalty_sign
+        self.rescore = bool(kwargs.get("rescore", True))
+        self._prev_inequality_multipliers = None
+        self._prev_equality_multipliers = None
         self.multiplier_solvers = []
         self.dual_problems = []
         self._prev_objective_multipliers = None
         self.multiplier_immigrants = float(kwargs.get("multiplier_immigrants", 0.0))
         self.multiplier_steps = int(kwargs.get("multiplier_steps", 1))
+        self._n_objectives = 1
         if problem.is_multi_objective():
-            n_objectives = len(problem.evaluate(initial_solution).fitness)
-            for m in range(n_objectives):
+            self._n_objectives = len(problem.evaluate(initial_solution).fitness)
+        if problem.is_multi_objective() and self.multiplier_mode == "per_objective":
+            for m in range(self._n_objectives):
                 dual = _DualMultiplierProblem(
                     problem, m,
                     self.max_problem.num_inequality,
@@ -616,11 +654,18 @@ class CoevolutionaryLagrangianSolver(Solver):
         # penalised landscape.
         self.objective_solver.check_environment()
 
+        if self.dual_scoring == "anchor":
+            anchor = self.min_problem.original_evaluation(
+                self._select_multiplier_anchor()
+            )
         multipliers = []
         for m, (dual, solver) in enumerate(
             zip(self.dual_problems, self.multiplier_solvers)
         ):
-            dual.set_reference(self._reference_evaluations(m))
+            if self.dual_scoring == "anchor":
+                dual.set_reference([anchor])
+            else:
+                dual.set_reference(self._reference_evaluations(m))
             # The dual landscape changed with the new reference set.
             solver.respond_to_change()
             if self.multiplier_immigrants > 0.0:
@@ -630,7 +675,7 @@ class CoevolutionaryLagrangianSolver(Solver):
             multipliers.append((list(best[:k]), list(best[k:])))
 
         self.min_problem.set_objective_multipliers(multipliers)
-        if multipliers != self._prev_objective_multipliers:
+        if self.rescore and multipliers != self._prev_objective_multipliers:
             self.objective_solver.rescore()
         self._prev_objective_multipliers = multipliers
 
@@ -639,6 +684,71 @@ class CoevolutionaryLagrangianSolver(Solver):
             for _ in range(self.multiplier_steps):
                 solver.step()
         self._prune_cache()
+
+    def _step_shared(self) -> None:
+        """One co-evolutionary step with one multiplier solver for all
+        objectives, scored against the anchor solution."""
+        self.objective_solver.check_environment()
+
+        anchor = self._select_multiplier_anchor()
+        best_multipliers, _ = self.multiplier_solver.get_result()[0]
+        k = self.max_problem.num_inequality
+        inequality_multipliers = list(best_multipliers[:k])
+        equality_multipliers = list(best_multipliers[k:])
+
+        self.min_problem.set_fixed_multipliers(
+            inequality_multipliers, equality_multipliers
+        )
+        changed = (
+            self._prev_inequality_multipliers != inequality_multipliers
+            or self._prev_equality_multipliers != equality_multipliers
+        )
+        if self.rescore and changed:
+            self.objective_solver.rescore()
+        self._prev_inequality_multipliers = inequality_multipliers
+        self._prev_equality_multipliers = equality_multipliers
+
+        self.max_problem.set_fixed_solution(anchor)
+        self.multiplier_solver.respond_to_change()
+
+        self.objective_solver.step()
+        self.multiplier_solver.step()
+        self._prune_cache()
+
+    def _select_multiplier_anchor(self) -> list:
+        """The solution the multipliers are scored against in the shared mode
+        and with `dual_scoring="anchor"`.
+
+        The most-violating archive member, or the least-violating population
+        member when the archive is empty.
+        """
+        results = self.objective_solver.get_result()
+        if results:
+            worst_idx = max(
+                range(len(results)),
+                key=lambda i: _total_violation(results[i][1]),
+            )
+            return results[worst_idx][0]
+
+        population = self.objective_solver.get_population()
+        evaluations = self.objective_solver.get_population_evaluations()
+        best_idx = min(
+            range(len(population)),
+            key=lambda i: _total_violation(evaluations[i]),
+        )
+        return population[best_idx]
+
+    @property
+    def objective_multipliers(self) -> List[Tuple[List[float], List[float]]]:
+        """The (mu, lambda) pair used for each objective in the last step."""
+        if self.min_problem.objective_multipliers is not None:
+            return [
+                (list(mu), list(la))
+                for mu, la in self.min_problem.objective_multipliers
+            ]
+        mu = list(self.min_problem.fixed_multipliers_inequality)
+        la = list(self.min_problem.fixed_multipliers_equality)
+        return [(list(mu), list(la)) for _ in range(self._n_objectives)]
 
     def _prune_cache(self) -> None:
         """Keeps only the cached evaluations of the current positions,
@@ -665,7 +775,10 @@ class CoevolutionaryLagrangianSolver(Solver):
         3. Advancing each subordinate solver by one iteration.
         """
         if self.problem.is_multi_objective():
-            self._step_per_objective()
+            if self.multiplier_mode == "shared":
+                self._step_shared()
+            else:
+                self._step_per_objective()
             return
 
         if hasattr(self.objective_solver, "check_environment"):
